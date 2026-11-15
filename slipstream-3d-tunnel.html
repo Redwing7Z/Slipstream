@@ -1,0 +1,1923 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Slipstream 3D Tunnel</title>
+<style>html{color-scheme:dark}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<!-- Slipstream. Copyright (c) 2026 Claas Kuhnen <info@ckbrd.de>. MIT License. Results are for design exploration, not certified engineering numbers. Third-party libraries keep their own licenses (see licenses/). -->
+
+<link rel="stylesheet" href="lib/fonts.css">
+<style>
+/* Layout: instrument console — live 3D tunnel left, control rack right (stacks on phones) */
+:root{
+  --bg:#0d1117; --panel:#151b24; --line:#263142; --fg:#e4e9f0; --dim:#8794a8; --accent:#4fc3ff; --warn:#ffb648;
+  --f-display:"Barlow Condensed","Arial Narrow",sans-serif;
+  --f-body:"Barlow",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,monospace;
+  color-scheme:dark;
+}
+html,body{height:100%}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:14px;box-sizing:border-box;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header{display:flex;align-items:baseline;gap:14px;padding-block:14px 10px;flex-wrap:wrap}
+h1{font-family:var(--f-display);font-weight:600;font-size:26px;letter-spacing:.04em;text-transform:uppercase;margin:0}
+header p{margin:0;color:var(--dim)}
+header a{color:var(--accent)}
+.app{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;padding-bottom:16px}
+@media (max-width:900px){.app{grid-template-columns:minmax(0,1fr)}}
+.stage{min-width:0;display:flex;flex-direction:column;gap:10px}
+.tunnel{position:relative;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:#05070a;height:min(68vh,62vw);min-height:300px}
+.tunnel canvas{display:block;width:100%;height:100%}
+body.m-design .eng-only,body.m-eng .design-only{display:none!important}
+header .modes{margin-left:auto;flex:none;display:flex;gap:4px}
+header .modes button{padding:6px 14px}
+.stable{position:absolute;left:10px;bottom:10px;display:flex;gap:10px;align-items:center;padding:6px 14px 6px 6px;border-radius:24px;background:rgba(13,17,23,.85);border:1px solid var(--line);pointer-events:none}
+.stable svg{transform:rotate(-90deg);flex:none}
+.stable .trk{fill:none;stroke:#2a3140;stroke-width:4}
+.stable .arc{fill:none;stroke:var(--warn);stroke-width:4;stroke-linecap:round;stroke-dasharray:94.25;transition:stroke-dashoffset .4s}
+.stable[data-state="stable"] .arc{stroke:#5fe0a0}
+.stable[data-state="stable"]{border-color:#1f5a3f}
+.stable span{display:flex;flex-direction:column;line-height:1.2}
+.stable b{font-family:var(--f-display);font-weight:600;font-size:16px;letter-spacing:.04em}
+.stable small{font-size:12px;color:var(--dim)}
+.hud{position:absolute;left:10px;top:8px;font-family:var(--f-mono);font-size:12px;color:#fff;text-shadow:0 1px 2px #000;pointer-events:none}
+.cams{position:absolute;right:8px;top:8px;display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;max-width:calc(100% - 16px)}
+.cams button{flex:none;padding:4px 9px;background:rgba(21,27,36,.85)}
+.cams .proj{margin-left:8px}
+.msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;background:rgba(5,7,10,.9);line-height:1.5}
+.msg div{max-width:440px}
+.legends{display:grid;grid-template-columns:auto auto minmax(80px,1fr) auto;gap:6px 10px;align-items:center;font-family:var(--f-mono);font-size:12px;color:var(--dim)}
+.legends canvas{width:100%;height:12px;border-radius:2px}
+.legends .k{font-family:var(--f-display);font-size:13px;letter-spacing:.08em;text-transform:uppercase}
+.legends .hi{text-align:right}
+.readout{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+@media (max-width:620px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.rowlab{font-family:var(--f-display);font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin:2px 0 -4px}
+.res3{grid-template-columns:minmax(0,1fr) minmax(0,2fr) minmax(0,1.3fr)}
+@media (max-width:620px){.res3{grid-template-columns:minmax(0,1fr)}}
+.stat.cmp b{font-size:22px;white-space:normal}
+.stat.cmp small,#baseName{white-space:normal;line-height:1.4}
+.stat .seg{margin-top:5px}
+.eng{border:1px solid var(--line);border-radius:6px;background:var(--panel)}
+.eng summary{cursor:pointer;padding:9px 12px;font-family:var(--f-display);font-size:14px;letter-spacing:.08em;text-transform:uppercase;color:var(--fg)}
+.eng summary span{font-family:var(--f-body);font-size:12px;letter-spacing:0;text-transform:none;color:var(--dim);margin-left:8px}
+.eng summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.eng[open] summary{border-bottom:1px solid var(--line)}
+.eng .band{margin:10px 12px 0;font-size:12.5px;line-height:1.5;color:var(--fg);border-left:3px solid var(--warn);padding-left:10px}
+.eng .readout{padding:10px 12px 12px}
+.eng .stat{background:var(--bg)}
+.stat small{display:block;font-family:var(--f-mono);font-size:11px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip{display:inline-block;font-family:var(--f-mono);font-size:13px;padding:2px 8px;border-radius:10px;margin-top:3px;background:#2a3140;color:var(--dim)}
+.chip.go{background:#123c2a;color:#5fe0a0}.chip.wait{background:#3b2f12;color:var(--warn)}
+.meta{font-family:var(--f-mono);font-size:12px;color:var(--dim);display:flex;gap:18px;flex-wrap:wrap}
+button.primary{background:var(--accent);color:#04121c;border-color:var(--accent);font-weight:500}
+h2{font-family:var(--f-display);font-weight:600;font-size:17px;letter-spacing:.08em;text-transform:uppercase;margin:0}
+.valid{display:flex;flex-direction:column;gap:10px;margin-top:8px}
+.vhead{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.vsum{display:flex;flex-direction:column;gap:4px;font-size:13px;line-height:1.45}
+.vsum b{font-family:var(--f-mono);font-weight:500}
+.keys{display:flex;gap:14px;font-family:var(--f-mono);font-size:12px;color:var(--dim);flex-wrap:wrap}
+.keys i{display:inline-block;width:14px;height:2px;vertical-align:middle;margin-right:6px;border-radius:1px}
+.vcharts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+@media (max-width:760px){.vcharts{grid-template-columns:minmax(0,1fr)}}
+.chart{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px 10px 6px;position:relative;min-width:0}
+.chart h3{margin:0 0 2px;font-family:var(--f-display);font-weight:500;font-size:14px;letter-spacing:.06em;text-transform:uppercase}
+.chart p{margin:0 0 6px;font-size:12px;color:var(--dim)}
+.chart canvas{display:block;width:100%;height:220px}
+.tip{position:absolute;pointer-events:none;background:#0b0f15;border:1px solid var(--line);border-radius:4px;padding:6px 8px;font-family:var(--f-mono);font-size:12px;white-space:nowrap;z-index:5}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:6px}
+table{border-collapse:collapse;width:100%;font-family:var(--f-mono);font-size:12.5px;font-variant-numeric:tabular-nums}
+th,td{padding:6px 10px;text-align:right;border-bottom:1px solid #222b38;white-space:nowrap}
+th{font-family:var(--f-display);font-weight:500;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);background:var(--panel)}
+td:first-child,th:first-child{text-align:left}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:8px 12px;min-width:0}
+.stat b{display:block;font-family:var(--f-mono);font-weight:500;font-size:19px;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stat span{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+aside{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.grp{display:flex;flex-direction:column;gap:7px}
+.lab{font-family:var(--f-display);font-size:14px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);display:flex;justify-content:space-between}
+.lab output{font-family:var(--f-mono);color:var(--fg);letter-spacing:0}
+.seg{display:flex;flex-wrap:wrap;gap:4px}
+button,.file{font:inherit;font-size:13px;background:#1d2531;color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:6px 10px;cursor:pointer;flex:1 1 auto;text-align:center}
+button:hover,.file:hover{border-color:var(--accent)}
+button[aria-pressed="true"]{background:var(--accent);color:#04121c;border-color:var(--accent)}
+button:disabled{opacity:.4;cursor:not-allowed}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.file input{display:none}
+.row{display:flex;gap:8px;align-items:center}
+select,input[type=number]{font:inherit;background:#1d2531;color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:5px;min-width:0;flex:1}
+.check{display:flex;gap:8px;align-items:center;cursor:pointer}
+.note{font-size:12px;color:var(--dim);line-height:1.45;margin:0}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+</style>
+
+<header>
+  <h1>Slipstream 3D Tunnel</h1>
+  <p>GPU flow simulation · drag to orbit, scroll to zoom · <a href="slipstream-profile-lab.html" target="_blank" rel="noopener">open Profile Lab</a> for 2D sections</p>
+  <div class="modes" id="modeSel" role="group" aria-label="Mode"><button data-mode="design">Design</button><button data-mode="eng">Engineering</button></div>
+</header>
+
+<div class="app">
+  <div class="stage">
+    <div class="tunnel" id="tunnel">
+      <div class="hud" id="hud">Starting…</div>
+      <div class="cams" id="cams"><button data-c="3d">3D</button><button data-c="side">Side</button><button data-c="top">Top</button><button data-c="front">Front</button><button id="proj" class="proj" aria-pressed="false" title="Switch between perspective and orthographic (true-scale) view">Ortho</button></div>
+      <div class="stable" id="stable" data-state="start" aria-live="polite"><svg viewBox="0 0 36 36" width="32" height="32" aria-hidden="true"><circle cx="18" cy="18" r="15" class="trk"/><circle cx="18" cy="18" r="15" class="arc" id="stArc" style="stroke-dashoffset:94.25"/></svg><span><b id="stTitle">Starting</b><small id="stSub">preparing the tunnel</small></span></div>
+      <div class="msg" id="msg" hidden><div id="msgText"></div></div>
+    </div>
+    <div class="legends">
+      <span class="k">Surface pressure</span><span id="pLo">−1.5 Cp</span><canvas id="leg" width="256" height="1"></canvas><span class="hi" id="pHi">+1.0 Cp</span>
+      <span class="k">Air speed</span><span>0 km/h</span><canvas id="leg2" width="256" height="1"></canvas><span class="hi" id="vHi">160 km/h</span>
+    </div>
+    <div class="rowlab eng-only">Result</div>
+    <div class="readout res3 eng-only">
+      <div class="stat"><span>Readings</span><b><span class="chip wait" id="status">settling</span></b><small id="statusNote">&nbsp;</small></div>
+      <div class="stat cmp"><span>Compared with baseline</span><b id="cmpMain">No baseline yet</b><small id="cmpNote">Wait for readings, then set this design as the baseline.</small></div>
+      <div class="stat"><span>Baseline</span><div class="seg"><button id="setBase" disabled>Set as baseline</button><button id="clearBase" disabled>Clear</button></div><small id="baseName">&nbsp;</small></div>
+    </div>
+    <details class="eng eng-only" id="eng">
+      <summary>Engineering details<span>rough absolute values · read the error band first</span></summary>
+      <p class="band" id="band"></p>
+      <div class="readout">
+        <div class="stat"><span>Drag Cd</span><b id="cd">–</b><small id="cdVar">&nbsp;</small></div>
+        <div class="stat"><span id="liftLab">Lift Cl</span><b id="cl">–</b><small>+ up · − down</small></div>
+        <div class="stat"><span>Side force Cs</span><b id="cs">–</b><small>from yaw</small></div>
+        <div class="stat"><span>Frontal area</span><b id="area">–</b><small id="areaNote">measured from model</small></div>
+        <div class="stat"><span>Drag force</span><b id="dragN">–</b><small id="dragKg">&nbsp;</small></div>
+        <div class="stat"><span>Power to push air</span><b id="dragKW">–</b><small id="dragHp">&nbsp;</small></div>
+        <div class="stat"><span id="liftNLab">Lift force</span><b id="liftN">–</b><small id="liftKg">&nbsp;</small></div>
+        <div class="stat"><span>Tunnel blockage</span><b id="block">–</b><small id="blockNote">&nbsp;</small></div>
+      </div>
+    </details>
+    <div class="meta eng-only"><span>Real Reynolds <b id="re">–</b></span><span>GPU <b id="fps">–</b></span></div>
+    <p class="note design-only">Wait for the <b>Stable</b> indicator before studying the flow or saving images. On the model, red marks where the air pushes hardest and blue where it pulls.</p>
+    <p class="note eng-only">The flow pictures are the most trustworthy result. To judge a design change, set a baseline, change one thing, and keep resolution, scale, air speed and real length the same. A difference is reported once it is larger than the ± of both runs combined and at least 3%; Precise averaging (Resolution panel) narrows the ±.</p>
+
+    <section class="valid eng-only" id="vSec" hidden aria-labelledby="vTitle">
+      <div class="vhead"><h2 id="vTitle">Validation</h2><span class="meta" id="vProg"></span></div>
+      <div class="vsum" id="vSum"></div>
+      <div class="vcharts">
+        <div class="chart"><h3>Error against reference</h3><p>Blockage-corrected Cd vs published value, by cells across the body. 0% is a perfect match.</p><canvas id="vErr"></canvas><div class="keys" id="vErrKeys"></div></div>
+        <div class="chart"><h3>Ahmed body: drag by slant angle</h3><p>Published at Re 4.3 million: lowest near 12°, peak at 30°, sharp drop above 30°.</p><canvas id="vAhm"></canvas><div class="keys" id="vAhmKeys"></div></div>
+      </div>
+      <div class="tablewrap"><div id="vTable"></div></div>
+      <p class="note" id="vMethod"></p>
+    </section>
+  </div>
+
+  <aside>
+    <div class="grp">
+      <span class="lab">Model</span>
+      <div class="seg" id="presets"><button data-p="car">Car</button><button data-p="helmet">Helmet</button><button data-p="scooter">Scooter</button><button data-p="drone">Drone</button></div>
+      <label class="file">Load STL / OBJ…<input type="file" id="file" accept=".stl,.obj"></label>
+      <div id="meshOpts" class="row" hidden>
+        <select id="upAxis"><option value="1">Y up</option><option value="2">Z up</option><option value="0">X up</option></select>
+        <button id="flip">Flip facing</button>
+      </div>
+      <div class="row eng-only"><span class="note">Real length (m)</span><input type="number" id="len" step="0.05" min="0.05" value="4.6"></div>
+    </div>
+
+    <div class="grp"><span class="lab">Air speed <output id="spdOut"></output></span><input type="range" id="spd" min="10" max="200" value="100"></div>
+
+    <div class="grp">
+      <span class="lab">Scale in tunnel <output id="sizeOut"></output></span><input type="range" id="size" min="8" max="50" value="35" aria-label="Scale in tunnel">
+      <p class="note eng-only">Model length as a share of the tunnel. Bigger shows more detail; past about 35% the walls start squeezing the flow and raise Cd.</p>
+      <p class="note design-only">Model length as a share of the tunnel. Around 30% works well; much bigger and the tunnel walls start squeezing the flow.</p>
+      <span class="lab">Height above floor <output id="hOut"></output></span><input type="range" id="h" min="0" max="70" value="0" aria-label="Height above floor">
+      <div class="two">
+        <div><span class="lab">Yaw <output id="yawOut"></output></span><input type="range" id="yaw" min="-45" max="45" value="0"></div>
+        <div><span class="lab">Pitch <output id="pitchOut"></output></span><input type="range" id="pitch" min="-30" max="30" value="0"></div>
+      </div>
+    </div>
+
+    <div class="grp design-only">
+      <span class="lab">Detail</span>
+      <div class="seg" id="detail"><button data-d="fast">Fast</button><button data-d="fine">Fine</button></div>
+    </div>
+    <div class="grp eng-only">
+      <span class="lab">Resolution</span>
+      <div class="seg" id="res"><button data-r="0">Low</button><button data-r="1">Medium</button><button data-r="2">High</button><button data-r="3">Ultra</button></div>
+      <span class="lab" id="precLab">Number precision</span>
+      <div class="seg" id="prec"><button data-p="16">16-bit</button><button data-p="32">32-bit</button></div>
+      <span class="lab">Readings average</span>
+      <div class="seg" id="avgMode"><button data-a="std">Standard</button><button data-a="precise">Precise</button></div>
+      <p class="note">Standard averages the last half pass of air. Precise keeps averaging once stable, at least two passes and up to four for a restless wake, for smaller ± values.</p>
+      <span class="lab">Surface layer</span>
+      <div class="seg" id="wallMode"><button data-w="res">Resolved</button><button data-w="wm">Wall model (exp.)</button></div>
+      <label class="check"><input type="checkbox" id="nwd"> Near-wall damping</label>
+      <p class="note" id="wallNote">Resolved (recommended) runs at a scaled-down Reynolds number. Wall model (experimental) runs at the real Reynolds number and sets the surface cells' viscosity from the law of the wall: in validation it improved rounded shapes at moderate Reynolds numbers, read sharp-edged shapes lower, and did not fix vehicle drag. Damping turns the turbulence model down right at the surface.</p>
+      <button id="bench">Speed test</button>
+      <p class="note" id="benchOut">Measures simulation speed for 5 seconds with screen updates paused.</p>
+    </div>
+
+    <div class="grp">
+      <span class="lab">Air flow</span>
+      <div class="seg" id="flow"><button data-f="lines">Streamlines</button><button data-f="parts">Particles</button><button data-f="off">Off</button></div>
+      <span class="lab">Flow view</span>
+      <div class="seg" id="view"><button data-v="live">Live</button><button data-v="avg">Averaged</button></div>
+      <p class="note" id="viewNote">Live shows the flow as it is right now.</p>
+      <label class="check"><input type="checkbox" id="anim" checked> Animate streamlines</label>
+      <span class="lab">Line thickness <output id="lwOut">1 px</output></span><input type="range" id="lw" min="0.5" max="6" step="0.5" value="1" aria-label="Streamline thickness">
+      <label class="check"><input type="checkbox" id="surf" checked> Surface pressure colors</label>
+      <label class="check"><input type="checkbox" id="ground" checked> Moving road floor</label>
+    </div>
+
+    <div class="grp">
+      <span class="lab">2D slice <output id="slOut"></output></span>
+      <div class="seg" id="slice"><button data-s="off">Off</button><button data-s="side">Side</button><button data-s="top">Top</button></div>
+      <input type="range" id="slPos" min="0" max="100" value="50" aria-label="Slice position">
+      <div class="seg" id="slMode"><button data-m="vel">Speed</button><button data-m="pres">Pressure</button><button data-m="vort">Swirl</button></div>
+    </div>
+
+    <div class="seg"><button id="pause">Pause</button><button id="reset">Reset flow</button></div>
+    <div class="grp eng-only">
+      <span class="lab">Validation</span>
+      <select id="vCase" aria-label="Benchmark">
+        <option value="all">All benchmarks</option>
+        <option value="sphere200">Sphere, Re 200 (solver check)</option>
+        <option value="sphere">Sphere, Re 5,000</option>
+        <option value="plate">Square plate facing the flow</option>
+        <option value="cube">Cube, face on</option>
+        <option value="ahmed">Ahmed body, slant 0–35°</option>
+      </select>
+      <label class="check"><input type="checkbox" id="vGrid" checked> Grid convergence (Medium, High, Ultra)</label>
+      <button class="primary" id="vRun">Run validation</button>
+      <button id="vBack" hidden>Back to my model</button>
+      <p class="note" id="vNote">Runs standard shapes with published drag values and reports how far off the tunnel is.</p>
+    </div>
+    <div class="grp" id="exportGrp" hidden>
+      <span class="lab">Export</span>
+      <div class="grp design-only">
+        <div class="seg" id="imgBg"><button data-b="dark">Dark background</button><button data-b="light">Light background</button></div>
+        <label class="check"><input type="checkbox" id="imgLeg" checked> Include color legend</label>
+        <label class="check"><input type="checkbox" id="imgLayers" checked> Layered Photoshop file</label>
+        <button class="primary" id="saveImg">Save image</button>
+        <button id="saveSet">Save view set (ZIP)</button>
+      </div>
+      <div class="grp eng-only">
+        <button id="pdf">Export PDF report</button>
+        <button id="vPdf" hidden>Export validation report</button>
+      </div>
+      <p class="note" id="pdfNote">Views, baseline comparison and sections, with rough values and the error band in an appendix.</p>
+    </div>
+  </aside>
+</div>
+
+<script src="lib/three.min.js"></script>
+<script src="lib/jspdf.umd.min.js"></script>
+<script src="lib/jszip.min.js"></script>
+<script src="lib/ag-psd.js"></script>
+<script src="lib/OrbitControls.js"></script>
+<script src="lib/LineSegmentsGeometry.js"></script>
+<script src="lib/LineMaterial.js"></script>
+<script src="lib/LineSegments2.js"></script>
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+// ---------- lattice constants (D3Q19) ----------
+const EX=[0,1,-1,0,0,0,0,1,-1,1,-1,0,0,1,-1,1,-1,0,0];
+const EY=[0,0,0,1,-1,0,0,1,-1,0,0,1,-1,-1,1,0,0,1,-1];
+const EZ=[0,0,0,0,0,1,-1,0,0,1,-1,1,-1,0,0,-1,1,-1,1];
+const WT=EX.map((_,i)=>i===0?1/3:(i<7?1/18:1/36));
+const find=(x,y,z)=>EX.findIndex((_,j)=>EX[j]===x&&EY[j]===y&&EZ[j]===z);
+const OPP=EX.map((_,i)=>find(-EX[i],-EY[i],-EZ[i]));
+const MY=EX.map((_,i)=>find(EX[i],-EY[i],EZ[i]));
+const MZ=EX.map((_,i)=>find(EX[i],EY[i],-EZ[i]));
+const U0=0.08;
+const RES=[[128,64,64],[176,88,88],[240,120,120],[320,160,160]];
+
+const arr=(t,a)=>`array<${t},19>(${a.map(v=>t==='f32'?v.toFixed(8):v+(t==='u32'?'u':'')).join(',')})`;
+const WGSL_BODY=(F16)=>`${F16?'enable f16;':''}
+struct P { W:u32, H:u32, D:u32, N:u32, u0:f32, tau:f32, ground:u32, flags:u32 };
+@group(0) @binding(0) var<uniform> p:P;
+@group(0) @binding(1) var<storage,read> fin:array<${F16?'f16':'f32'}>;
+@group(0) @binding(2) var<storage,read_write> fout:array<${F16?'f16':'f32'}>;
+@group(0) @binding(3) var<storage,read> solid:array<u32>;
+@group(0) @binding(4) var<storage,read_write> vel:array<vec4<f32>>;
+@group(0) @binding(5) var<storage,read_write> force:array<atomic<i32>,4>;
+// wall position along each fluid->solid link: one byte per direction (19 per cell, packed in 5 words); 0 = unknown (use 0.5)
+@group(0) @binding(6) var<storage,read> qlink:array<u32>;
+var<private> EX:array<i32,19> = ${arr('i32',EX)};
+var<private> EY:array<i32,19> = ${arr('i32',EY)};
+var<private> EZ:array<i32,19> = ${arr('i32',EZ)};
+var<private> WT:array<f32,19> = ${arr('f32',WT)};
+${F16?`fn rd(d:u32,x:u32)->f32{ return f32(fin[d*p.N+x])+WT[d]; }
+fn wr(d:u32,x:u32,v:f32){ fout[d*p.N+x]=f16(v-WT[d]); }`:`fn rd(d:u32,x:u32)->f32{ return fin[d*p.N+x]; }
+fn wr(d:u32,x:u32,v:f32){ fout[d*p.N+x]=v; }`}
+var<private> OPP:array<u32,19> = ${arr('u32',OPP)};
+var<private> MY:array<u32,19> = ${arr('u32',MY)};
+var<private> MZ:array<u32,19> = ${arr('u32',MZ)};
+fn ev(i:u32)->vec3<f32>{ return vec3<f32>(f32(EX[i]),f32(EY[i]),f32(EZ[i])); }
+fn feq(i:u32,r:f32,u:vec3<f32>)->f32{ let eu=3.0*dot(ev(i),u); return WT[i]*r*(1.0+eu+0.5*eu*eu-1.5*dot(u,u)); }
+@compute @workgroup_size(128)
+fn init(@builtin(global_invocation_id) gid:vec3<u32>){
+  let c=gid.x; if(c>=p.N){return;}
+  for(var i=0u;i<19u;i++){ wr(i,c,feq(i,1.0,vec3<f32>(p.u0,0.0,0.0))); }
+  vel[c]=vec4<f32>(p.u0,0.0,0.0,1.0);
+}
+var<workgroup> wf:array<vec3<f32>,128>;
+@compute @workgroup_size(128)
+fn step(@builtin(global_invocation_id) gid:vec3<u32>, @builtin(local_invocation_index) li:u32){
+  var fo=vec3<f32>(0.0);
+  if(gid.x<p.N){ fo=cell(gid.x); }
+  // forces are summed only on flagged steps (the flag is uniform, so the barriers stay in uniform control flow)
+  if((p.flags&1u)!=0u){
+    wf[li]=fo; workgroupBarrier();
+    for(var s=64u; s>0u; s=s>>1u){ if(li<s){ wf[li]=wf[li]+wf[li+s]; } workgroupBarrier(); }
+    if(li==0u){
+      let t=wf[0];
+      if(any(t!=vec3<f32>(0.0))){
+        atomicAdd(&force[0],i32(round(t.x*20000.0))); atomicAdd(&force[1],i32(round(t.y*20000.0))); atomicAdd(&force[2],i32(round(t.z*20000.0)));
+      }
+    }
+  }
+}
+fn cell(c:u32)->vec3<f32>{
+  if(solid[c]!=0u){ if((p.flags&2u)!=0u){ vel[c]=vec4<f32>(0.0,0.0,0.0,1.0); } return vec3<f32>(0.0); }
+  let W=i32(p.W); let H=i32(p.H); let D=i32(p.D); let N=p.N;
+  let ci=i32(c); let x=ci%W; let y=(ci/W)%H; let z=ci/(W*H);
+  var fl:array<f32,19>; var eq:array<f32,19>;
+  var r=0.0; var m=vec3<f32>(0.0); var fo=vec3<f32>(0.0);
+  // pressure outlet: incoming populations at the exit use density 1 and the exit cell's own velocity,
+  // so the tunnel keeps its air mass instead of slowly draining
+  var uo=vec3<f32>(0.0);
+  if(x==W-1){ var rr=0.0; var mm=vec3<f32>(0.0); for(var j=0u;j<19u;j++){ let v=rd(j,c); rr+=v; mm+=v*ev(j); } uo=mm/rr; }
+  for(var i=0u;i<19u;i++){
+    let sx=x-EX[i]; let sy=y-EY[i]; let sz=z-EZ[i];
+    var v:f32;
+    if(sx<0){ v=feq(i,1.0,vec3<f32>(p.u0,0.0,0.0)); }
+    else if(sx>=W){ v=feq(i,1.0,uo); }
+    else if(sy<0){ if(p.ground==1u){ v=rd(OPP[i],c)+6.0*WT[i]*f32(EX[i])*p.u0; } else { v=rd(MY[i],c); } }
+    else if(sy>=H){ v=rd(MY[i],c); }
+    else if(sz<0 || sz>=D){ v=rd(MZ[i],c); }
+    else {
+      let s=u32(sx+W*(sy+H*sz));
+      if(solid[s]!=0u){
+        // curved-wall bounce-back (Bouzidi): interpolate so the wall acts at the true surface, not the cell edge
+        let o=OPP[i]; let fv=rd(o,c); v=fv;
+        let qb=(qlink[c*5u+(o>>2u)]>>((o&3u)*8u))&255u;
+        if(qb!=0u){
+          let q=f32(qb-1u)/254.0;
+          if(q<0.5){
+            let nx=x+EX[i]; let ny=y+EY[i]; let nz=z+EZ[i];
+            if(nx>=0 && nx<W && ny>=0 && ny<H && nz>=0 && nz<D){
+              let n=u32(nx+W*(ny+H*nz));
+              if(solid[n]==0u){ v=2.0*q*fv+(1.0-2.0*q)*rd(o,n); }
+            }
+          } else { v=fv/(2.0*q)+(1.0-1.0/(2.0*q))*rd(i,c); }
+        }
+        fo+=((fv-WT[o])+(v-WT[i]))*ev(o);
+      }
+      else { v=rd(i,s); }
+    }
+    fl[i]=v; r+=v; m+=v*ev(i);
+  }
+  var u=m/r; let sp=dot(u,u); if(sp>0.09){ u=u*(0.3/sqrt(sp)); }
+  var pxx=0.0; var pyy=0.0; var pzz=0.0; var pxy=0.0; var pxz=0.0; var pyz=0.0;
+  for(var i=0u;i<19u;i++){
+    let e=feq(i,r,u); eq[i]=e; let d=fl[i]-e; let k=ev(i);
+    pxx+=d*k.x*k.x; pyy+=d*k.y*k.y; pzz+=d*k.z*k.z; pxy+=d*k.x*k.y; pxz+=d*k.x*k.z; pyz+=d*k.y*k.z;
+  }
+  let Q=sqrt(pxx*pxx+pyy*pyy+pzz*pzz+2.0*(pxy*pxy+pxz*pxz+pyz*pyz));
+  // calm-down zone before the exit: extra viscosity so wake swirls don't bounce back off the outlet
+  var t=p.tau; let sp0=f32(W)*0.8;
+  if(f32(x)>sp0){ let q=(f32(x)-sp0)/(f32(W)-sp0); t=t+0.4*q*q; }
+  // light Smagorinsky turbulence model (Cs = 0.1): enough for stability, little extra damping on the body
+  let te=0.5*(t+sqrt(t*t+18.0*1.41421356*0.01*Q/r)); let om=1.0/te;
+  // regularized collision: rebuild the non-equilibrium part from the stress tensor only,
+  // which removes the high-order noise that makes plain BGK blow up at low viscosity
+  for(var i=0u;i<19u;i++){
+    let k=ev(i);
+    let fneq=WT[i]*4.5*((k.x*k.x-0.33333333)*pxx+(k.y*k.y-0.33333333)*pyy+(k.z*k.z-0.33333333)*pzz
+             +2.0*(k.x*k.y*pxy+k.x*k.z*pxz+k.y*k.z*pyz));
+    wr(i,c,eq[i]+(1.0-om)*fneq);
+  }
+  if((p.flags&2u)!=0u){ vel[c]=vec4<f32>(u,r); }
+  return fo;
+}`;
+const WGSL=WGSL_BODY(false);
+// ---- unrolled kernel generator: every direction written out with its constants, so values stay in registers
+// (equivalent to the loop version above, which is kept as the readable reference)
+const fnum=v=>{const t=Number.isInteger(v)?v.toFixed(1):(+v.toPrecision(9)).toString();return /[.e]/.test(t)?t:t+'.0';};
+function lin(terms){ // terms: [coef, expr]; builds "a*x+b*y" without zero terms
+  let out='';
+  for(const [k,e] of terms){ if(k===0)continue; const sgn=k<0?'-':(out?'+':''), a=Math.abs(k);
+    out+=sgn+(a===1?e:fnum(a)+'*'+e); }
+  return out||'0.0';
+}
+function genKernel(F16){
+  const R=(d,x)=>F16?`(f32(fin[${d}u*N+${x}])+${fnum(WT[d])})`:`fin[${d}u*N+${x}]`;
+  const Wr=(d,x,v)=>F16?`fout[${d}u*N+${x}]=f16(${v}-${fnum(WT[d])});`:`fout[${d}u*N+${x}]=${v};`;
+  const eu=(i,ux,uy,uz)=>lin([[3*EX[i],ux],[3*EY[i],uy],[3*EZ[i],uz]]);
+  const feqS=(i,rho,ux,uy,uz,usq)=>{const e=eu(i,ux,uy,uz);return e==='0.0'?`${fnum(WT[i])}*${rho}*(1.0-${usq})`:`${fnum(WT[i])}*${rho}*(1.0+(${e})+0.5*(${e})*(${e})-${usq})`;};
+  const off=(i,sign)=>{let o='';const t=[[EX[i],'1u'],[EY[i],'WU'],[EZ[i],'WHU']];for(const [k,e] of t){if(!k)continue;o+=((k*sign)>0?'+':'-')+e;}return o;};
+  const L=[];
+  L.push(`${F16?'enable f16;':''}
+struct P { W:u32, H:u32, D:u32, N:u32, u0:f32, tau:f32, ground:u32, flags:u32, avgScale:f32, wm:u32, nu:f32, q3:u32 };
+@group(0) @binding(0) var<uniform> p:P;
+@group(0) @binding(1) var<storage,read> fin:array<${F16?'f16':'f32'}>;
+@group(0) @binding(2) var<storage,read_write> fout:array<${F16?'f16':'f32'}>;
+@group(0) @binding(3) var<storage,read> solid:array<u32>;
+@group(0) @binding(4) var<storage,read_write> vel:array<vec4<f32>>;
+@group(0) @binding(5) var<storage,read_write> force:array<atomic<i32>,4>;
+@group(0) @binding(6) var<storage,read> qlink:array<u32>;
+// running sum of velocity and density for the time-averaged view (flag 4 adds to it)
+@group(0) @binding(7) var<storage,read_write> avg:array<vec4<f32>>;
+@compute @workgroup_size(128)
+fn avgout(@builtin(global_invocation_id) gid:vec3<u32>){
+  let c=gid.x; if(c>=p.N){return;}
+  vel[c]=avg[c]*p.avgScale;
+}
+@compute @workgroup_size(128)
+fn init(@builtin(global_invocation_id) gid:vec3<u32>){
+  let c=gid.x; let N=p.N; if(c>=N){return;}
+  let usq=1.5*p.u0*p.u0;`);
+  for(let i=0;i<19;i++)L.push('  '+Wr(i,'c',feqS(i,'1.0','p.u0','0.0','0.0','usq')));
+  L.push(`  vel[c]=vec4<f32>(p.u0,0.0,0.0,1.0);
+}
+var<workgroup> wf:array<vec3<f32>,128>;
+@compute @workgroup_size(128)
+fn step(@builtin(global_invocation_id) gid:vec3<u32>, @builtin(local_invocation_index) li:u32){
+  var fo=vec3<f32>(0.0);
+  if(gid.x<p.N){ fo=cell(gid.x); }
+  if((p.flags&1u)!=0u){
+    wf[li]=fo; workgroupBarrier();
+    for(var s=64u; s>0u; s=s>>1u){ if(li<s){ wf[li]=wf[li]+wf[li+s]; } workgroupBarrier(); }
+    if(li==0u){
+      let t=wf[0];
+      if(any(t!=vec3<f32>(0.0))){
+        atomicAdd(&force[0],i32(round(t.x*20000.0))); atomicAdd(&force[1],i32(round(t.y*20000.0))); atomicAdd(&force[2],i32(round(t.z*20000.0)));
+      }
+    }
+  }
+}
+fn cell(c:u32)->vec3<f32>{
+  if(solid[c]!=0u){ if((p.flags&2u)!=0u){ vel[c]=vec4<f32>(0.0,0.0,0.0,1.0); } if((p.flags&4u)!=0u){ avg[c]=avg[c]+vec4<f32>(0.0,0.0,0.0,1.0); } return vec3<f32>(0.0); }
+  let W=i32(p.W); let H=i32(p.H); let D=i32(p.D); let N=p.N; let WU=p.W; let WHU=p.W*p.H;
+  let ci=i32(c); let x=ci%W; let y=(ci/W)%H; let z=ci/(W*H);
+  let xin=x==0; let xout=x==W-1; let ylo=y==0; let yhi=y==H-1; let zlo=z==0; let zhi=z==D-1;
+  var fo=vec3<f32>(0.0);
+  let usqIn=1.5*p.u0*p.u0;
+  var uox=0.0; var uoy=0.0; var uoz=0.0;
+  if(xout){`);
+  // outlet: exit cell's own velocity
+  L.push('    '+Array.from({length:19},(_,j)=>`let g${j}=${R(j,'c')};`).join(' '));
+  L.push(`    let rr=${Array.from({length:19},(_,j)=>'g'+j).join('+')};`);
+  L.push(`    uox=(${lin(EX.map((k,j)=>[k,'g'+j]))})/rr; uoy=(${lin(EY.map((k,j)=>[k,'g'+j]))})/rr; uoz=(${lin(EZ.map((k,j)=>[k,'g'+j]))})/rr;`);
+  L.push(`  }
+  let usqOut=1.5*(uox*uox+uoy*uoy+uoz*uoz);
+  var nsl=0u;
+  let h0=${R(0,'c')};`);
+  for(let i=1;i<19;i++){
+    const o=OPP[i], ex=EX[i], ey=EY[i], ez=EZ[i], conds=[];
+    if(ex===1)conds.push(['xin',`h${i}=${feqS(i,'1.0','p.u0','0.0','0.0','usqIn')};`]);
+    if(ex===-1)conds.push(['xout',`h${i}=${feqS(i,'1.0','uox','uoy','uoz','usqOut')};`]);
+    if(ey===1)conds.push(['ylo',`if(p.ground==1u){ h${i}=${R(o,'c')}${ex?`+${fnum(6*WT[i]*ex)}*p.u0`:''}; } else { h${i}=${R(MY[i],'c')}; }`]);
+    if(ey===-1)conds.push(['yhi',`h${i}=${R(MY[i],'c')};`]);
+    if(ez)conds.push([ez===1?'zlo':'zhi',`h${i}=${R(MZ[i],'c')};`]);
+    // neighbour in direction i (for the curved-wall interpolation) must be inside the grid
+    const nIn=[ex===1?'!xout':ex===-1?'!xin':'',ey===1?'!yhi':ey===-1?'!ylo':'',ez===1?'!zhi':ez===-1?'!zlo':''].filter(Boolean).join(' && ')||'true';
+    const interior=`{
+    let s=c${off(i,-1)};
+    if(solid[s]!=0u){
+      nsl=nsl+1u;
+      let fv=${R(o,'c')}; var v=fv;
+      let qb=(qlink[c*5u+${o>>2}u]>>${(o&3)*8}u)&255u;
+      if(qb!=0u){
+        let q=f32(qb-1u)/254.0;
+        if(q<0.5){ if(${nIn}){ let n=c${off(i,1)}; if(solid[n]==0u){ v=2.0*q*fv+(1.0-2.0*q)*${R(o,'n')}; } } }
+        else { v=fv/(2.0*q)+(1.0-1.0/(2.0*q))*${R(i,'c')}; }
+      }
+      fo+=vec3<f32>(${fnum(-ex)},${fnum(-ey)},${fnum(-ez)})*((fv-${fnum(WT[o])})+(v-${fnum(WT[i])}));
+      h${i}=v;
+    } else { h${i}=${R(i,'s')}; }
+  }`;
+    let code=`  var h${i}:f32;\n  `;
+    conds.forEach(([cnd,body],k)=>{code+=(k?' else ':'')+`if(${cnd}){ ${body} }`;});
+    code+=(conds.length?' else ':'')+interior;
+    L.push(code);
+  }
+  const F=Array.from({length:19},(_,i)=>'h'+i);
+  L.push(`  let r=${F.join('+')};
+  var u=vec3<f32>(${lin(EX.map((k,i)=>[k,F[i]]))},${lin(EY.map((k,i)=>[k,F[i]]))},${lin(EZ.map((k,i)=>[k,F[i]]))})/r;
+  let sp=dot(u,u); if(sp>0.09){ u=u*(0.3/sqrt(sp)); }
+  let ux=u.x; let uy=u.y; let uz=u.z; let usq=1.5*(ux*ux+uy*uy+uz*uz);`);
+  for(let i=0;i<19;i++)L.push(`  let e${i}=${feqS(i,'r','ux','uy','uz','usq')}; let d${i}=h${i}-e${i};`);
+  const D=Array.from({length:19},(_,i)=>'d'+i), pick=f=>lin(D.map((d,i)=>[f(i),d]));
+  L.push(`  let pxx=${pick(i=>EX[i]*EX[i])}; let pyy=${pick(i=>EY[i]*EY[i])}; let pzz=${pick(i=>EZ[i]*EZ[i])};
+  let pxy=${pick(i=>EX[i]*EY[i])}; let pxz=${pick(i=>EX[i]*EZ[i])}; let pyz=${pick(i=>EY[i]*EZ[i])};
+  let Q=sqrt(pxx*pxx+pyy*pyy+pzz*pzz+2.0*(pxy*pxy+pxz*pxz+pyz*pyz));
+  var t=p.tau; let sp0=f32(W)*0.8;
+  if(f32(x)>sp0){ let qq=(f32(x)-sp0)/(f32(W)-sp0); t=t+0.4*qq*qq; }
+  var cs2=0.01; var tw=0.0;`);
+  // ---- wall model (p.wm bit 1) and near-wall damping (bit 2), only in cells next to the body ----
+  // The turbulence model puts 10-40x more viscosity next to the wall than a real turbulent surface layer has, which
+  // thickens it and makes rounded bodies separate early. The wall model sets this cell's viscosity from Spalding's
+  // law of the wall so the wall friction matches the law (wall-function viscosity); it never adds momentum.
+  const guard=i=>[EX[i]===1?'!xin':EX[i]===-1?'!xout':'',EY[i]===1?'!ylo':EY[i]===-1?'!yhi':'',EZ[i]===1?'!zlo':EZ[i]===-1?'!zhi':''].filter(Boolean).join(' && ')||'true';
+  const cvec=i=>`vec3<f32>(${fnum(EX[i])},${fnum(EY[i])},${fnum(EZ[i])})`;
+  const qOf=i=>`(qlink[c*5u+${OPP[i]>>2}u]>>${(OPP[i]&3)*8}u)&255u`;
+  L.push(`  if(p.wm!=0u && nsl>0u){
+    // wall normal (pointing into the air) and distance to the wall, from the links that hit the body
+    var nrm=vec3<f32>(0.0); var qc=vec3<f32>(0.0); var cnt=0.0;`);
+  for(let i=1;i<19;i++)L.push(`    if(${guard(i)}){ if(solid[c${off(i,-1)}]!=0u){ let qb=${qOf(i)}; let q=select(0.5,f32(qb-1u)/254.0,qb!=0u); nrm+=${cvec(i)}; qc+=q*${cvec(i)}; cnt+=1.0; } }`);
+  L.push(`    let nl=length(nrm);
+    if(nl>1e-6){
+      let nh=nrm/nl; let yw=max(0.05,dot(qc,nh)/cnt);
+      let ut=length(u-dot(u,nh)*nh);
+      if(ut>1e-7){
+        // Spalding's law of the wall solved for the friction velocity (Newton; exact to f32 in 5 steps)
+        let rey=ut*yw/p.nu;
+        var up=clamp(min(sqrt(rey),log(1.0+rey)*2.0731707+2.0),0.001,80.0);
+        for(var it=0;it<5;it++){
+          let k=0.41*up; let ex=exp(k); let k2=k*k;
+          let Y=up+0.11859986*(ex-1.0-k-0.5*k2-k2*k/6.0); let Yp=1.0+0.048625941*(ex-1.0-k-0.5*k2);
+          up=clamp(up-(up*Y-rey)/(Y+up*Yp),0.001,80.0);
+        }
+        let utau=ut/up;
+        if((p.wm&2u)!=0u){ let dv=1.0-exp(-yw*utau/p.nu/26.0); cs2=0.01*dv*dv; }
+        if((p.wm&1u)!=0u){ tw=0.5+3.0*max(p.nu,utau*utau*yw/ut); }
+      }
+    }
+  }
+  var te=0.5*(t+sqrt(t*t+18.0*1.41421356*cs2*Q/r));
+  // never below a quarter of the turbulence model's value: sharp edges need that much to stay calm
+  if(tw>0.0){ te=max(tw,0.5+0.25*(te-0.5)); }
+  let omc=1.0-1.0/te;`);
+  for(let i=0;i<19;i++){
+    const a=EX[i],b=EY[i],cc=EZ[i], k=v=>v*WT[i]*4.5;
+    const fneq=lin([[k(a*a-1/3),'pxx'],[k(b*b-1/3),'pyy'],[k(cc*cc-1/3),'pzz'],[k(2*a*b),'pxy'],[k(2*a*cc),'pxz'],[k(2*b*cc),'pyz']]);
+    L.push('  '+Wr(i,'c',`(e${i}+omc*(${fneq}))`));
+  }
+  L.push(`  if((p.flags&2u)!=0u){ vel[c]=vec4<f32>(u,r); }
+  if((p.flags&4u)!=0u){ avg[c]=avg[c]+vec4<f32>(u,r); }
+  return fo;
+}`);
+  return L.join('\n');
+}
+
+
+// ---------- state ----------
+const S={res:1,flow:'lines',surf:true,ground:true,slice:'off',slPos:.5,slMode:'vel',paused:false,
+  speed:100,damp:1,lineW:1,f16:false,animate:true,view:'live',precise:false,wm:false,nwd:false,size:.35,h:0,yaw:0,pitch:0,len:4.6,up:1,flip:false,preset:'car',meshTris:null};
+let W,H,D,N;
+let device,pipeStep,pipeInit,layout,bgA,bgB,bufs={},solid,field=null,maxBinding=0;
+let tau=0.52,frontal=1,modelBox=null,needVox=true,pending=false,lastRead=0,stepsAcc=0,spf=4,flipPing=false;
+let cdE=null,clE=0,csE=0,hist=[],lastStepsPerSec=0,settle=0,note='',noteUntil=0;
+
+// ---------- three.js scene ----------
+const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
+renderer.setPixelRatio(Math.min(2,devicePixelRatio));
+$('tunnel').prepend(renderer.domElement);
+const scene=new THREE.Scene(); scene.background=new THREE.Color(0x05070a);
+const camera=new THREE.PerspectiveCamera(40,1,0.5,5000);
+const controls=new THREE.OrbitControls(camera,renderer.domElement); controls.enableDamping=true;
+// orthographic twin of the main camera: same position and target, no perspective, zoom via camera.zoom
+const orthoCam3=new THREE.OrthographicCamera(-1,1,1,-1,0.1,10000);
+let useOrtho=false, viewAspect=1;
+const viewCam=()=>useOrtho?orthoCam3:camera;
+// straight views frame the tunnel face itself; other angles frame what the perspective camera sees at the target distance
+let orthoFace=null;
+const faceFor=c=>c==='side'?[W,H]:c==='top'?[W,D]:c==='front'?[D,H]:null;
+function fitOrtho(){
+  const hh=orthoFace?Math.max(orthoFace[0]/2*1.04/viewAspect,orthoFace[1]/2*1.08):orthoCam3.position.distanceTo(controls.target)*Math.tan(camera.fov*Math.PI/360);
+  orthoCam3.left=-hh*viewAspect;orthoCam3.right=hh*viewAspect;orthoCam3.top=hh;orthoCam3.bottom=-hh;orthoCam3.updateProjectionMatrix();
+}
+function setOrtho(on){
+  if(on===useOrtho)return;
+  if(on){orthoCam3.position.copy(camera.position);orthoCam3.up.copy(camera.up);orthoCam3.zoom=1;useOrtho=true;controls.object=orthoCam3;orthoFace=faceFor(curCam);fitOrtho();}
+  else{const dir=orthoCam3.position.clone().sub(controls.target), d=dir.length()/orthoCam3.zoom;
+    camera.position.copy(controls.target).add(dir.setLength(d));useOrtho=false;controls.object=camera;}
+  $('proj').setAttribute('aria-pressed',useOrtho); controls.update();
+}
+scene.add(new THREE.HemisphereLight(0xdde6ff,0x202530,0.9));
+const sun=new THREE.DirectionalLight(0xffffff,0.7); sun.position.set(-1,2,1.5); scene.add(sun);
+const tunnelGroup=new THREE.Group(); scene.add(tunnelGroup);
+const modelRoot=new THREE.Group(), modelNorm=new THREE.Group(); modelRoot.add(modelNorm); scene.add(modelRoot);
+// streamlines are drawn as screen-space ribbons so their thickness can be set (plain WebGL lines are always 1 pixel)
+const lineGeo=new THREE.LineSegmentsGeometry(), lineMat=new THREE.LineMaterial({vertexColors:true,transparent:true,opacity:.55,depthWrite:false,linewidth:1});
+const lines=new THREE.LineSegments2(lineGeo,lineMat); lines.frustumCulled=false; scene.add(lines);
+const NPART=14000, partPos=new Float32Array(NPART*3), partCol=new Float32Array(NPART*3);
+const partGeo=new THREE.BufferGeometry();
+partGeo.setAttribute('position',new THREE.BufferAttribute(partPos,3)); partGeo.setAttribute('color',new THREE.BufferAttribute(partCol,3));
+const parts=new THREE.Points(partGeo,new THREE.PointsMaterial({size:2.2,sizeAttenuation:false,vertexColors:true})); parts.frustumCulled=false; scene.add(parts);
+let sliceMesh=null,sliceTex=null,sliceData=null;
+
+const tunnelParts={};
+function buildTunnel(){
+  tunnelGroup.clear();
+  const box=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(W,H,D)),new THREE.LineBasicMaterial({color:0x3a4658}));
+  box.position.set(W/2,H/2,D/2); tunnelGroup.add(box); tunnelParts.box=box;
+  const floor=new THREE.Mesh(new THREE.PlaneGeometry(W,D),new THREE.MeshLambertMaterial({color:0x161b22}));
+  floor.rotation.x=-Math.PI/2; floor.position.set(W/2,-0.01,D/2); tunnelGroup.add(floor); tunnelParts.floor=floor;
+  const grid=new THREE.GridHelper(Math.max(W,D),Math.max(W,D)/8,0x2a3442,0x1e2632);
+  grid.position.set(W/2,0,D/2); tunnelGroup.add(grid); tunnelParts.grid=grid;
+  // inlet arrow
+  const arrow=new THREE.ArrowHelper(new THREE.Vector3(1,0,0),new THREE.Vector3(-W*0.12,H*0.5,D/2),W*0.09,0x4fc3ff,W*0.03,W*0.02);
+  tunnelGroup.add(arrow);
+}
+
+// ---------- model geometry ----------
+function cylBetween(a,b,r,mat){
+  const A=new THREE.Vector3(...a),B=new THREE.Vector3(...b),dir=B.clone().sub(A),L=dir.length();
+  const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,L,16),mat);
+  m.position.copy(A).add(B).multiplyScalar(.5); m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),dir.normalize()); return m;
+}
+function presetMeshes(name){
+  const mat=surfMat(), out=[];
+  const add=(geo,pos,rot)=>{const m=new THREE.Mesh(geo,mat);if(pos)m.position.set(...pos);if(rot)m.rotation.set(...rot);out.push(m);return m;};
+  if(name==='car'){
+    const p=[0,.08,.01,.14,.06,.17,.25,.19,.38,.28,.48,.30,.62,.29,.82,.22,.97,.20,1,.17,.99,.08,.9,.06,.1,.06];
+    const sh=new THREE.Shape(); sh.moveTo(p[0],p[1]); for(let i=2;i<p.length;i+=2)sh.lineTo(p[i],p[i+1]);
+    const g=new THREE.ExtrudeGeometry(sh,{depth:.34,bevelEnabled:true,bevelThickness:.05,bevelSize:.03,bevelSegments:4,curveSegments:8});
+    g.translate(0,0,-.17); add(g);
+    for(const [x,z] of [[.18,.2],[.18,-.2],[.8,.2],[.8,-.2]]) add(new THREE.CylinderGeometry(.07,.07,.07,24),[x,.07,z],[Math.PI/2,0,0]);
+  }else if(name==='helmet'){
+    const pts=[];for(let i=0;i<=40;i++){const t=i/40;pts.push(new THREE.Vector2(.22*Math.pow(Math.sin(Math.PI*Math.pow(t,.55)),.9),t));}
+    const g=new THREE.LatheGeometry(pts,40); g.rotateZ(-Math.PI/2); g.scale(1,.85,1); add(g,[0,.3,0]);
+    add(new THREE.SphereGeometry(.19,32,20),[.3,.16,0]);
+    add(new THREE.CylinderGeometry(.09,.11,.25,20),[.33,-.02,0]);
+  }else if(name==='scooter'){
+    add(new THREE.BoxGeometry(.7,.03,.14),[.5,.095,0]);
+    for(const x of [.12,.88]) add(new THREE.CylinderGeometry(.06,.06,.045,24),[x,.06,0],[Math.PI/2,0,0]);
+    out.push(cylBetween([.115,.1,0],[.055,.9,0],.018,mat));
+    out.push(cylBetween([.05,.9,-.22],[.05,.9,.22],.015,mat));
+    for(const z of [-.08,.08]) out.push(cylBetween([.45,.12,z],[.43,.85,z],.06,mat));
+    out.push(cylBetween([.43,.82,0],[.38,1.32,0],.14,mat));
+    add(new THREE.SphereGeometry(.1,24,16),[.36,1.47,0]);
+    for(const z of [-.17,.17]) out.push(cylBetween([.38,1.28,z],[.06,.92,z*1.2],.04,mat));
+  }else if(name==='drone'){
+    add(new THREE.BoxGeometry(.32,.11,.3),[.5,.5,0]);
+    add(new THREE.SphereGeometry(.05,16,12),[.33,.47,0]);
+    for(const [x,z] of [[.15,.35],[.15,-.35],[.85,.35],[.85,-.35]]){
+      out.push(cylBetween([.5,.52,0],[x,.52,z],.018,mat));
+      add(new THREE.CylinderGeometry(.03,.03,.06,16),[x,.55,z]);
+      add(new THREE.CylinderGeometry(.15,.15,.012,32),[x,.59,z]);
+    }
+  }
+  return out;
+}
+function surfMat(){return new THREE.MeshLambertMaterial({vertexColors:true});}
+function setModel(meshes){
+  modelNorm.clear(); modelNorm.position.set(0,0,0); modelNorm.scale.set(1,1,1);
+  for(const m of meshes){
+    let g=m.geometry; if(g.index){g=g.toNonIndexed();m.geometry=g;}
+    g.computeVertexNormals();
+    const n=g.attributes.position.count, c=new Float32Array(n*3).fill(.86);
+    g.setAttribute('color',new THREE.BufferAttribute(c,3));
+    modelNorm.add(m);
+  }
+  // measure the new model in its own units, without the previous model's placement applied
+  modelRoot.position.set(0,0,0); modelRoot.rotation.set(0,0,0); modelRoot.scale.setScalar(1);
+  modelRoot.updateMatrixWorld(true);
+  const bb=new THREE.Box3().setFromObject(modelNorm), s=1/Math.max(1e-9,bb.max.x-bb.min.x);
+  modelNorm.scale.setScalar(s);
+  modelNorm.position.set(-(bb.min.x+bb.max.x)/2*s, -bb.min.y*s, -(bb.min.z+bb.max.z)/2*s);
+  S.modelHN=(bb.max.y-bb.min.y)*s;
+  if(W)placeModel();
+  needVox=true;
+}
+function placeModel(){
+  const L=S.size*W;
+  modelRoot.scale.setScalar(L);
+  modelRoot.rotation.set(0,0,0);
+  modelRoot.rotateY(-S.yaw*Math.PI/180);
+  modelRoot.rotateZ(-S.pitch*Math.PI/180);
+  modelRoot.position.set(W*0.34, S.h*H+0.6, D/2);
+  modelRoot.updateMatrixWorld(true);
+}
+
+// ---------- voxelizer (ray parity along x) ----------
+let linkStats=null;
+// Wall position along every fluid->solid lattice link, from mesh triangles (grid units). Returns 19 bytes per cell packed in 5 u32.
+// byte = 1 + round(t*254) where t in [0,1] is the fraction of the link from the fluid cell centre to the surface; 0 = not found (solver uses 0.5).
+function computeLinkQ(parts,solid,W,H,D,EX,EY,EZ){
+  const N=W*H*D, Q=new Uint32Array(N*5);
+  let total=0; for(const T of parts)total+=T.length/9;
+  const tri=new Float32Array(total*9); {let k=0; for(const T of parts){tri.set(T,k);k+=T.length;}}
+  const bins=new Map();
+  for(let t=0;t<total;t++){const b=t*9;
+    const x0=Math.floor(Math.min(tri[b],tri[b+3],tri[b+6])),x1=Math.floor(Math.max(tri[b],tri[b+3],tri[b+6]));
+    const y0=Math.floor(Math.min(tri[b+1],tri[b+4],tri[b+7])),y1=Math.floor(Math.max(tri[b+1],tri[b+4],tri[b+7]));
+    const z0=Math.floor(Math.min(tri[b+2],tri[b+5],tri[b+8])),z1=Math.floor(Math.max(tri[b+2],tri[b+5],tri[b+8]));
+    for(let z=Math.max(0,z0);z<=Math.min(D-1,z1);z++)for(let y=Math.max(0,y0);y<=Math.min(H-1,y1);y++)for(let x=Math.max(0,x0);x<=Math.min(W-1,x1);x++){
+      const k=x+W*(y+H*z); let a=bins.get(k); if(!a)bins.set(k,a=[]); a.push(t);}
+  }
+  const stamp=new Int32Array(total).fill(-1); let link=0, found=0, missing=0;
+  const hit=(t,ox,oy,oz,dx,dy,dz)=>{ // Moller-Trumbore, returns ray parameter or -1
+    const b=t*9,ax=tri[b],ay=tri[b+1],az=tri[b+2],e1x=tri[b+3]-ax,e1y=tri[b+4]-ay,e1z=tri[b+5]-az,e2x=tri[b+6]-ax,e2y=tri[b+7]-ay,e2z=tri[b+8]-az;
+    const px=dy*e2z-dz*e2y,py=dz*e2x-dx*e2z,pz=dx*e2y-dy*e2x,det=e1x*px+e1y*py+e1z*pz; if(Math.abs(det)<1e-12)return -1;
+    const inv=1/det,sx=ox-ax,sy=oy-ay,sz=oz-az,u=(sx*px+sy*py+sz*pz)*inv; if(u<-1e-7||u>1+1e-7)return -1;
+    const qx=sy*e1z-sz*e1y,qy=sz*e1x-sx*e1z,qz=sx*e1y-sy*e1x,v=(dx*qx+dy*qy+dz*qz)*inv; if(v<-1e-7||u+v>1+1e-7)return -1;
+    return (e2x*qx+e2y*qy+e2z*qz)*inv;};
+  for(let z=0;z<D;z++)for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    const s=x+W*(y+H*z); if(!solid[s])continue;
+    for(let o=1;o<19;o++){
+      const fx=x-EX[o],fy=y-EY[o],fz=z-EZ[o]; if(fx<0||fy<0||fz<0||fx>=W||fy>=H||fz>=D)continue;
+      const c=fx+W*(fy+H*fz); if(solid[c])continue;
+      link++; const ox=fx+.5,oy=fy+.5,oz=fz+.5; let best=2;
+      // the link runs through the fluid cell, the solid cell and (for diagonal links) the cells between them
+      const cells=[c,s]; if(EX[o])cells.push(c+EX[o]); if(EY[o])cells.push(c+W*EY[o]); if(EZ[o])cells.push(c+W*H*EZ[o]);
+      for(const k of cells){const a=bins.get(k); if(!a)continue;
+        for(const t of a){if(stamp[t]===link)continue; stamp[t]=link; const r=hit(t,ox,oy,oz,EX[o],EY[o],EZ[o]); if(r>=-1e-6&&r<=1.5&&r<best)best=r;}}
+      // a surface beyond the solid cell's centre (cells kept solid for thin parts) counts as sitting at that centre
+      if(best<=1.5){const b=1+Math.round(Math.max(0,Math.min(1,best))*254); Q[c*5+(o>>2)]|=b<<((o&3)*8); found++;} else missing++;
+    }
+  }
+  return {Q,links:link,found,missing};
+}
+
+
+function partTris(){
+  const parts=[]; const v=new THREE.Vector3();
+  modelNorm.traverse(o=>{
+    if(!o.isMesh)return; const a=o.geometry.attributes.position, T=new Float32Array(a.count*3);
+    for(let i=0,k=0;i<a.count;i++){v.fromBufferAttribute(a,i).applyMatrix4(o.matrixWorld);T[k++]=v.x;T[k++]=v.y;T[k++]=v.z;}
+    parts.push(T);
+  });
+  return parts;
+}
+function voxelize(){
+  placeModel(); solid.fill(0);
+  // benchmarks use the exact inside test only; the surface pass (keeps thin parts) inflates bodies by about half a cell
+  const parts=partTris();
+  for(const T of parts){fillPart(T);if(!S.bench)splatSurface(T);}
+  measureSolid();
+  device.queue.writeBuffer(bufs.solid,0,solid);
+  const lq=computeLinkQ(parts,solid,W,H,D,EX,EY,EZ); linkStats=lq; device.queue.writeBuffer(bufs.qlink,0,lq.Q);
+  cacheSurface(); updateTau(); clearHist();
+  needVox=false;
+}
+// mark every cell the surface passes through, so thin parts (stems, arms, rotor discs) stay solid
+function splatSurface(T){
+  for(let t=0;t<T.length;t+=9){
+    const ax=T[t],ay=T[t+1],az=T[t+2],bx=T[t+3]-ax,by=T[t+4]-ay,bz=T[t+5]-az,cx=T[t+6]-ax,cy=T[t+7]-ay,cz=T[t+8]-az;
+    const e=Math.max(Math.hypot(bx,by,bz),Math.hypot(cx,cy,cz),Math.hypot(bx-cx,by-cy,bz-cz));
+    const n=Math.min(400,Math.max(1,Math.ceil(e/0.6)));
+    for(let i=0;i<=n;i++)for(let j=0;i+j<=n;j++){
+      const u=i/n,w=j/n, x=(ax+u*bx+w*cx)|0, y=(ay+u*by+w*cy)|0, z=(az+u*bz+w*cz)|0;
+      if(x>=1&&x<=W-3&&y>=0&&y<H&&z>=0&&z<D)solid[x+W*(y+H*z)]=1;
+    }
+  }
+}
+function measureSolid(){
+  let area=0,ymin=H,ymax=0,zmin=D,zmax=0,xmin=W,xmax=0;
+  for(let zi=0;zi<D;zi++)for(let yi=0;yi<H;yi++){
+    const base=W*(yi+H*zi); let any=false;
+    for(let x=0;x<W;x++)if(solid[base+x]){any=true;if(x<xmin)xmin=x;if(x>xmax)xmax=x;}
+    if(any){area++;ymin=Math.min(ymin,yi);ymax=Math.max(ymax,yi);zmin=Math.min(zmin,zi);zmax=Math.max(zmax,zi);}
+  }
+  frontal=Math.max(1,area);
+  modelBox=area?{xmin,xmax,ymin,ymax:ymax+1,zmin,zmax:zmax+1}:{xmin:W*.3,xmax:W*.5,ymin:0,ymax:H*.3,zmin:D*.3,zmax:D*.7};
+}
+function fillPart(T){
+  const cols=new Array(H*D);
+  for(let t=0;t<T.length;t+=9){
+    const x0=T[t],y0=T[t+1],z0=T[t+2],x1=T[t+3],y1=T[t+4],z1=T[t+5],x2=T[t+6],y2=T[t+7],z2=T[t+8];
+    const det=(y1-y0)*(z2-z0)-(y2-y0)*(z1-z0); if(Math.abs(det)<1e-12)continue;
+    const ya=Math.max(0,Math.ceil(Math.min(y0,y1,y2)-.5)), yb=Math.min(H-1,Math.floor(Math.max(y0,y1,y2)-.5));
+    const za=Math.max(0,Math.ceil(Math.min(z0,z1,z2)-.5)), zb=Math.min(D-1,Math.floor(Math.max(z0,z1,z2)-.5));
+    for(let yi=ya;yi<=yb;yi++){const yc=yi+.5+1.3e-5;
+      for(let zi=za;zi<=zb;zi++){const zc=zi+.5+2.7e-5;
+        const b1=((yc-y0)*(z2-z0)-(y2-y0)*(zc-z0))/det, b2=((y1-y0)*(zc-z0)-(yc-y0)*(z1-z0))/det;
+        if(b1<0||b2<0||b1+b2>1)continue;
+        const xh=x0+b1*(x1-x0)+b2*(x2-x0), ci=yi+H*zi;
+        (cols[ci]||(cols[ci]=[])).push(xh);
+      }}
+  }
+  for(let zi=0;zi<D;zi++)for(let yi=0;yi<H;yi++){
+    const L=cols[yi+H*zi]; if(!L||L.length<2)continue;
+    L.sort((a,b)=>a-b);
+    for(let k=0;k+1<L.length;k+=2){
+      const xa=Math.max(1,Math.ceil(L[k]-.5)), xb=Math.min(W-3,Math.floor(L[k+1]-.5));
+      for(let x=xa;x<=xb;x++)solid[x+W*(yi+H*zi)]=1;
+    }
+  }
+}
+
+// ---------- GPU setup ----------
+async function initGPU(){
+  if(!navigator.gpu) return fail('This browser has no WebGPU. Use a current Chrome or Edge on Windows, or Chrome or Safari 26+ on Mac.');
+  const adapter=await navigator.gpu.requestAdapter({powerPreference:'high-performance'});
+  if(!adapter) return fail('WebGPU is present but no graphics adapter was found. Update the browser and graphics driver, then reload.');
+  maxBinding=Math.min(adapter.limits.maxStorageBufferBindingSize,adapter.limits.maxBufferSize);
+  // 16-bit storage halves memory traffic, which is what limits this solver; used when the GPU supports it
+  hasF16=adapter.features.has('shader-f16');
+  device=await adapter.requestDevice({requiredFeatures:hasF16?['shader-f16']:[],requiredLimits:{maxStorageBufferBindingSize:maxBinding,maxBufferSize:maxBinding}});
+  device.lost.then(i=>fail('The GPU stopped the simulation ('+(i.message||'device lost')+'). Reload the page, or pick a lower resolution.'));
+
+  const ent=(b,type)=>({binding:b,visibility:GPUShaderStage.COMPUTE,buffer:{type}});
+  layout=device.createBindGroupLayout({entries:[ent(0,'uniform'),ent(1,'read-only-storage'),ent(2,'storage'),ent(3,'read-only-storage'),ent(4,'storage'),ent(5,'storage'),ent(6,'read-only-storage'),ent(7,'storage')]});
+  const pl=device.createPipelineLayout({bindGroupLayouts:[layout]});
+  for(const bits of hasF16?[32,16]:[32]){const mod=device.createShaderModule({code:genKernel(bits===16)});
+    PIPES[bits]={step:device.createComputePipeline({layout:pl,compute:{module:mod,entryPoint:'step'}}),init:device.createComputePipeline({layout:pl,compute:{module:mod,entryPoint:'init'}}),avgout:device.createComputePipeline({layout:pl,compute:{module:mod,entryPoint:'avgout'}})};}
+  S.f16=hasF16; if(!hasF16){$('prec').hidden=true;$('precLab').hidden=true;}
+  checkResLimits();
+  return true;
+}
+function fail(t){$('msgText').textContent=t;$('msg').hidden=false;return false;}
+let hasF16=false; const PIPES={};
+const ddfBytes=()=>S.f16?2:4, fitsRes=r=>19*RES[r].reduce((a,b)=>a*b)*ddfBytes()<=maxBinding;
+function checkResLimits(){
+  RES.forEach((r,i)=>{const b=document.querySelector(`#res [data-r="${i}"]`);if(b)b.disabled=!fitsRes(i);});
+  while(S.res>0&&!fitsRes(S.res))S.res--;
+  press('prec','p',S.f16?16:32); if(typeof syncDetail==='function')syncDetail();
+}
+function alloc(){
+  [W,H,D]=RES[S.res]; N=W*H*D;
+  for(const k in bufs)bufs[k].destroy();
+  const mk=(size,usage)=>device.createBuffer({size,usage});
+  const SU=GPUBufferUsage;
+  pipeStep=PIPES[S.f16?16:32].step; pipeInit=PIPES[S.f16?16:32].init; pipeAvg=PIPES[S.f16?16:32].avgout; clearAvg();
+  const fb=Math.ceil(19*N*ddfBytes()/4)*4;
+  bufs={f0:mk(fb,SU.STORAGE),f1:mk(fb,SU.STORAGE),solid:mk(N*4,SU.STORAGE|SU.COPY_DST),qlink:mk(N*20,SU.STORAGE|SU.COPY_DST),
+    vel:mk(N*16,SU.STORAGE|SU.COPY_SRC),force:mk(16,SU.STORAGE|SU.COPY_SRC|SU.COPY_DST),
+    params:mk(48,SU.UNIFORM|SU.COPY_DST),paramsF:mk(48,SU.UNIFORM|SU.COPY_DST),paramsVF:mk(48,SU.UNIFORM|SU.COPY_DST),paramsV:mk(48,SU.UNIFORM|SU.COPY_DST),avg:mk(N*16,SU.STORAGE|SU.COPY_DST),
+    velStage0:mk(N*16,SU.MAP_READ|SU.COPY_DST),velStage1:mk(N*16,SU.MAP_READ|SU.COPY_DST),forceStage:mk(16,SU.MAP_READ|SU.COPY_DST)};
+  const bg=(a,b,pb=bufs.params)=>device.createBindGroup({layout,entries:[
+    {binding:0,resource:{buffer:pb}},{binding:1,resource:{buffer:a}},{binding:2,resource:{buffer:b}},
+    {binding:3,resource:{buffer:bufs.solid}},{binding:4,resource:{buffer:bufs.vel}},{binding:5,resource:{buffer:bufs.force}},{binding:6,resource:{buffer:bufs.qlink}},{binding:7,resource:{buffer:bufs.avg}}]});
+  bgA=bg(bufs.f0,bufs.f1); bgB=bg(bufs.f1,bufs.f0);
+  // [plain, sum forces, sum forces + write velocity] x [ping, pong]
+  BG=[[bgA,bgB],[bg(bufs.f0,bufs.f1,bufs.paramsF),bg(bufs.f1,bufs.f0,bufs.paramsF)],[bg(bufs.f0,bufs.f1,bufs.paramsVF),bg(bufs.f1,bufs.f0,bufs.paramsVF)],[bg(bufs.f0,bufs.f1,bufs.paramsV),bg(bufs.f1,bufs.f0,bufs.paramsV)]];
+  forceFree=[]; for(let i=0;i<8;i++){const fb=mk(16,SU.MAP_READ|SU.COPY_DST);bufs['forceStage'+i]=fb;forceFree.push(fb);} forceSteps=0; forceF=0; flipPing=false; stepCount=0;
+  solid=new Uint32Array(N); field=null; mappedStage=null; readCount=0; pending=false; inFlight=0; lastDone=0; gen++; stepsAcc=0; fStepsAcc=0; spf=2; visQueue=[];
+  lineGeo.instanceCount=0;
+  buildTunnel(); buildSlice(); seedParticles();
+  writeParams(); resetFlow(); needVox=true; setCam(curCam);
+  $('hud').textContent=`${W}×${H}×${D} grid · ${(N/1e6).toFixed(2)} M cells · warming up…`;
+}
+function writeParams(){
+  const b=new ArrayBuffer(48), u=new Uint32Array(b), f=new Float32Array(b), acc=avgAccum?4:0;
+  u[0]=W;u[1]=H;u[2]=D;u[3]=N;f[4]=U0;f[5]=tau;u[6]=S.ground?1:0;f[8]=avgSamples?1/avgSamples:0;u[9]=(S.wm?1:0)|(S.nwd?2:0);f[10]=nuMol;
+  for(const [k,fl] of [['params',0],['paramsF',1|acc],['paramsVF',3|acc],['paramsV',2]]){u[7]=fl;device.queue.writeBuffer(bufs[k],0,b);}
+}
+// ---- time-averaged view: the GPU adds velocity and density on the force-summing steps (every 4th step);
+// before a readback a small pass divides by the number of samples, so the screen shows the mean flow
+let avgAccum=false, avgSamples=0, avgNeedsClear=true, pipeAvg=null;
+function clearAvg(){avgAccum=false;avgSamples=0;avgNeedsClear=true;}
+// Without the wall model the tunnel runs at a scaled-down Reynolds number (the surface layer is treated as resolved).
+// With it, the air gets its real viscosity from the entered speed and length, and the wall model supplies the surface
+// friction a real turbulent boundary layer would give. In this method the speed of the simulation does not depend on Re.
+const NU_AIR=1.5e-5;
+let nuMol=0, simRe=0;
+function surfText(){return (S.wm?'wall model, real Re':'resolved, scaled Re')+(S.nwd?' + damping':'');}
+function realRe(){return S.speed/3.6*S.len/NU_AIR;}
+function updateTau(){
+  let Lc=S.size*W, ReEff=(S.wm?realRe():400+(S.speed-10)/190*6000)/S.damp;
+  // benchmarks run at a fixed, stated Reynolds number based on their own reference length
+  if(S.bench){Lc=S.bench.refLen*S.size*W;ReEff=((S.wm&&S.bench.reWM)||S.bench.re)/S.damp;}
+  nuMol=Math.max(S.wm?3e-7:1e-4,U0*Lc/ReEff); tau=0.5+3*nuMol; simRe=U0*Lc/nuMol; writeParams();
+}
+function resetFlow(){
+  writeParams();
+  const e=device.createCommandEncoder(), wg=Math.ceil(N/128);
+  for(const g of [bgA,bgB]){const p=e.beginComputePass();p.setPipeline(pipeInit);p.setBindGroup(0,g);p.dispatchWorkgroups(wg);p.end();}
+  e.clearBuffer(bufs.force); device.queue.submit([e.finish()]); forceSteps=0; forceF=0; clearHist(); seedParticles();
+}
+
+// ---------- field sampling ----------
+const tmp=[0,0,0,0];
+function sample(x,y,z,o){
+  let fx=x-.5,fy=y-.5,fz=z-.5;
+  fx=fx<0?0:fx>W-1.001?W-1.001:fx; fy=fy<0?0:fy>H-1.001?H-1.001:fy; fz=fz<0?0:fz>D-1.001?D-1.001:fz;
+  const i=fx|0,j=fy|0,k=fz|0,a=fx-i,b=fy-j,c=fz-k;
+  o[0]=o[1]=o[2]=o[3]=0;
+  for(let dz=0;dz<2;dz++)for(let dy=0;dy<2;dy++)for(let dx=0;dx<2;dx++){
+    const w=(dx?a:1-a)*(dy?b:1-b)*(dz?c:1-c), q=((i+dx)+W*((j+dy)+H*(k+dz)))*4;
+    o[0]+=w*field[q];o[1]+=w*field[q+1];o[2]+=w*field[q+2];o[3]+=w*field[q+3];
+  }
+  return o;
+}
+const isSolid=(x,y,z)=>{const i=x|0,j=y|0,k=z|0;return i<0||j<0||k<0||i>=W||j>=H||k>=D?false:solid[i+W*(j+H*k)]===1;};
+
+// colour maps
+function mkLut(stops){const o=new Float32Array(256*3);for(let i=0;i<256;i++){const t=i/255*(stops.length-1),k=Math.min(stops.length-2,t|0),u=t-k;for(let c=0;c<3;c++)o[i*3+c]=(stops[k][c]+(stops[k+1][c]-stops[k][c])*u)/255;}return o;}
+const RAIN=mkLut([[20,30,160],[30,120,240],[30,210,230],[60,210,80],[230,230,40],[245,130,20],[220,30,30]]);
+const SWIRL=mkLut([[40,110,255],[25,45,90],[12,14,20],[90,30,30],[255,80,60]]);
+const li=v=>((v<0?0:v>1?1:v)*255|0)*3;
+
+// ---------- surface pressure ----------
+let surf=[];
+function cacheSurface(){
+  surf=[]; const v=new THREE.Vector3(), n=new THREE.Vector3(), nm=new THREE.Matrix3();
+  modelNorm.traverse(o=>{
+    if(!o.isMesh)return; const g=o.geometry,a=g.attributes.position,na=g.attributes.normal,cnt=a.count;
+    nm.getNormalMatrix(o.matrixWorld); const P=new Float32Array(cnt*3);
+    for(let i=0;i<cnt;i++){
+      v.fromBufferAttribute(a,i).applyMatrix4(o.matrixWorld); n.fromBufferAttribute(na,i).applyMatrix3(nm).normalize();
+      let d=1.2; while(d<4&&isSolid(v.x+n.x*d,v.y+n.y*d,v.z+n.z*d))d+=.8;
+      P[i*3]=v.x+n.x*d;P[i*3+1]=v.y+n.y*d;P[i*3+2]=v.z+n.z*d;
+    }
+    surf.push({attr:g.attributes.color,P});
+  });
+}
+function paintSurface(){
+  const q=0.5*U0*U0;
+  for(const s of surf){
+    const C=s.attr.array,P=s.P;
+    for(let i=0;i<P.length;i+=3){
+      if(!S.surf||!field){C[i]=C[i+1]=C[i+2]=.86;continue;}
+      const x=P[i]|0,y=P[i+1]|0,z=P[i+2]|0;
+      if(x<0||y<0||z<0||x>=W||y>=H||z>=D){continue;}
+      const r=field[(x+W*(y+H*z))*4+3], cp=(r-1)/3/q, k=li((cp+1.5)/2.5);
+      C[i]=RAIN[k];C[i+1]=RAIN[k+1];C[i+2]=RAIN[k+2];
+    }
+    s.attr.needsUpdate=true;
+  }
+}
+
+// ---------- streamlines ----------
+const MAXSEG=380*700; const linePos=new Float32Array(MAXSEG*6), lineCol=new Float32Array(MAXSEG*6);
+lineGeo.setPositions(linePos); lineGeo.setColors(lineCol); lineGeo.instanceCount=0;
+const lineTime=new Float32Array(MAXSEG*2);
+{const ib=new THREE.InstancedInterleavedBuffer(lineTime,2,1);lineGeo.setAttribute('instanceDistanceStart',new THREE.InterleavedBufferAttribute(ib,1,0));lineGeo.setAttribute('instanceDistanceEnd',new THREE.InterleavedBufferAttribute(ib,1,1));}
+function rake(){
+  const b=modelBox,cy=(b.ymin+b.ymax)/2,hy=(b.ymax-b.ymin)*.7+2,cz=(b.zmin+b.zmax)/2,hz=(b.zmax-b.zmin)*.7+2;
+  return {y0:Math.max(.6,cy-hy),y1:Math.min(H-.6,cy+hy),z0:Math.max(.6,cz-hz),z1:Math.min(D-.6,cz+hz)};
+}
+function traceLines(){
+  if(!field||!modelBox)return; const r=rake(), ny=10, nz=14, o=[0,0,0,0], o2=[0,0,0,0]; let s=0;
+  for(let a=0;a<ny;a++)for(let b=0;b<nz;b++){
+    let x=1.2,y=r.y0+(a+.5)/ny*(r.y1-r.y0),z=r.z0+(b+.5)/nz*(r.z1-r.z0),tt=0;
+    for(let k=0;k<600&&s<MAXSEG;k++){
+      sample(x,y,z,o); let m=Math.hypot(o[0],o[1],o[2]); if(m<1e-5)break;
+      const h=.8/m, mx=x+o[0]*h*.5,my=y+o[1]*h*.5,mz=z+o[2]*h*.5;
+      sample(mx,my,mz,o2); const m2=Math.hypot(o2[0],o2[1],o2[2]); if(m2<1e-5)break;
+      const nx=x+o2[0]/m2*.8, ny2=y+o2[1]/m2*.8, nz2=z+o2[2]/m2*.8;
+      if(nx>=W-1||ny2<0||ny2>=H||nz2<0||nz2>=D||isSolid(nx,ny2,nz2))break;
+      const kk=li(m/(U0*1.6)), q=s*6;
+      linePos[q]=x;linePos[q+1]=y;linePos[q+2]=z;linePos[q+3]=nx;linePos[q+4]=ny2;linePos[q+5]=nz2;
+      for(let c=0;c<3;c++){lineCol[q+c]=RAIN[kk+c];lineCol[q+3+c]=RAIN[kk+c];}
+      lineTime[s*2]=tt; tt+=.8/m2; lineTime[s*2+1]=tt;
+      s++; x=nx;y=ny2;z=nz2;
+    }
+  }
+  lineGeo.instanceCount=s;
+  for(const k of ['instanceStart','instanceColorStart']){const b=lineGeo.attributes[k].data;b.updateRange.offset=0;b.updateRange.count=s*6;b.needsUpdate=true;}
+  {const b=lineGeo.attributes.instanceDistanceStart.data;b.updateRange.offset=0;b.updateRange.count=s*2;b.needsUpdate=true;}
+}
+
+// ---------- particles ----------
+function spawnP(i,anyX){
+  const r=modelBox?rake():{y0:1,y1:H-1,z0:1,z1:D-1};
+  partPos[i*3]=anyX?Math.random()*W*.9:Math.random()*2;
+  partPos[i*3+1]=r.y0+Math.random()*(r.y1-r.y0); partPos[i*3+2]=r.z0+Math.random()*(r.z1-r.z0);
+}
+function seedParticles(){for(let i=0;i<NPART;i++)spawnP(i,true);}
+function moveParticles(steps){
+  if(!field)return; const o=[0,0,0,0], k=Math.min(steps,14);
+  for(let i=0;i<NPART;i++){
+    const q=i*3; sample(partPos[q],partPos[q+1],partPos[q+2],o);
+    partPos[q]+=o[0]*k;partPos[q+1]+=o[1]*k;partPos[q+2]+=o[2]*k;
+    const x=partPos[q],y=partPos[q+1],z=partPos[q+2];
+    if(x>=W-1||y<0||y>=H||z<0||z>=D||isSolid(x,y,z))spawnP(i,false);
+    if(S.slice!=='off'){partCol[q]=partCol[q+1]=partCol[q+2]=.92;}
+    else{const c=li(Math.hypot(o[0],o[1],o[2])/(U0*1.6)); partCol[q]=RAIN[c];partCol[q+1]=RAIN[c+1];partCol[q+2]=RAIN[c+2];}
+  }
+  partGeo.attributes.position.needsUpdate=true; partGeo.attributes.color.needsUpdate=true;
+}
+
+// ---------- slice ----------
+function buildSlice(){
+  if(sliceMesh){scene.remove(sliceMesh);sliceMesh.geometry.dispose();sliceTex.dispose();sliceMesh=null;}
+  if(S.slice==='off')return;
+  const tw=W, th=S.slice==='side'?H:D;
+  sliceData=new Uint8Array(tw*th*4);
+  sliceTex=new THREE.DataTexture(sliceData,tw,th,THREE.RGBAFormat); sliceTex.magFilter=THREE.LinearFilter; sliceTex.minFilter=THREE.LinearFilter;
+  sliceMesh=new THREE.Mesh(new THREE.PlaneGeometry(tw,th),new THREE.MeshBasicMaterial({map:sliceTex,transparent:true,side:THREE.DoubleSide,depthWrite:false}));
+  scene.add(sliceMesh); placeSlice(); paintSlice();
+}
+function placeSlice(){
+  if(!sliceMesh)return;
+  if(S.slice==='side'){sliceMesh.rotation.set(0,0,0);sliceMesh.position.set(W/2,H/2,Math.min(D-1,S.slPos*D|0)+.5);}
+  else{sliceMesh.rotation.set(-Math.PI/2,0,0);sliceMesh.position.set(W/2,Math.min(H-1,S.slPos*H|0)+.5,D/2);}
+}
+function paintSlice(){
+  if(!sliceMesh||!field)return;
+  const side=S.slice==='side', th=side?H:D, q=0.5*U0*U0, mode=S.slMode;
+  const kfix=side?Math.min(D-1,S.slPos*D|0):Math.min(H-1,S.slPos*H|0);
+  const idx=(x,j)=>side?x+W*(j+H*kfix):x+W*(kfix+H*(D-1-j));
+  for(let j=0;j<th;j++)for(let x=0;x<W;x++){
+    const c=idx(x,j), o=(j*W+x)*4;
+    if(solid[c]){sliceData[o+3]=0;continue;}
+    const f=c*4; let v,L=RAIN;
+    if(mode==='vel')v=Math.hypot(field[f],field[f+1],field[f+2])/(U0*1.6);
+    else if(mode==='pres')v=((field[f+3]-1)/3/q+1.5)/2.5;
+    else{
+      const xl=idx(Math.max(0,x-1),j)*4,xr=idx(Math.min(W-1,x+1),j)*4,jd=idx(x,Math.max(0,j-1))*4,ju=idx(x,Math.min(th-1,j+1))*4;
+      // side: curl_z = dUy/dx - dUx/dy ; top (row index runs along -z): curl_y = dUx/dz - dUz/dx
+      const curl=side?(field[xr+1]-field[xl+1])-(field[ju]-field[jd]):-(field[ju]-field[jd])-(field[xr+2]-field[xl+2]);
+      v=.5+curl/U0*1.2; L=SWIRL;
+    }
+    const k=li(v); sliceData[o]=L[k]*255;sliceData[o+1]=L[k+1]*255;sliceData[o+2]=L[k+2]*255;sliceData[o+3]=225;
+  }
+  sliceTex.needsUpdate=true;
+}
+
+
+// ---------- camera ----------
+let curCam='3d';
+function setCam(c){
+  curCam=c; document.querySelectorAll('#cams button[data-c]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.c===c));
+  const tx=W*.4, ty=H*.22, tz=D/2;
+  controls.target.set(tx,ty,tz);
+  const C=viewCam();
+  // straight views aim at the tunnel's middle, far enough back that the whole tunnel face fits
+  const fit=(w,h)=>{const t=Math.tan(camera.fov*Math.PI/360);return Math.max(w/2*1.06/(t*viewAspect),h/2*1.12/t);};
+  if(c==='3d')C.position.set(tx-W*.55,ty+H*.85,tz+D*1.35);
+  else if(c==='side'){controls.target.set(W/2,H/2,D/2);C.position.set(W/2,H/2,D/2+fit(W,H)+D/2);}
+  else if(c==='top'){controls.target.set(W/2,H/2,D/2);C.position.set(W/2,H/2+fit(W,D)+H/2,D/2+.01);}
+  else{controls.target.set(W/2,H/2,D/2);C.position.set(W/2-fit(D,H)-W/2,H/2,D/2);}
+  if(useOrtho){orthoCam3.zoom=1;orthoFace=faceFor(c);fitOrtho();}
+  controls.update();
+}
+
+// ---------- main loop ----------
+// The GPU gets one batch of steps at a time; the next batch is sent only after the last one finished.
+// Batch size adapts so each batch takes ~12 ms, which keeps the page and its controls responsive.
+// ---- GPU loop: two batches kept in flight and refilled as soon as one finishes, so the GPU never waits for the screen.
+// Batch size adapts to about 8 ms of GPU work; the screen keeps drawing at its own pace.
+let gen=0, stepsWindow=0, winStart=performance.now(), inFlight=0, lastDone=0, stepCount=0, fStepsAcc=0, visQueue=[], BG=null;
+let mappedStage=null, readCount=0, interacting=false, doneSteps=0, benchmarking=false, showingAvg=false;
+let forceFree=[], forceSteps=0, forceF=0, lastJudge=0;
+let batchMs=8, maxInflight=2, frameMs=16.7, baseMs=16.7, lastFrameT=0;
+// refill the queue as a separate task, so timers, input and drawing always get their turn
+const kick=new MessageChannel(); kick.port1.onmessage=()=>simTick(); const scheduleTick=()=>kick.port2.postMessage(0);
+controls.addEventListener('start',()=>{interacting=true;}); controls.addEventListener('end',()=>{interacting=false;});
+function simTick(){
+  if(!device||!bufs.f0)return;
+  if(needVox){if(inFlight)return;voxelize();}
+  // while the camera is being dragged, keep only one batch queued so drawing stays smooth
+  const cap=benchmarking?2:interacting?1:maxInflight;
+  while(inFlight<cap)submitBatch();
+}
+function submitBatch(){
+  const now=performance.now(), enc=device.createCommandEncoder(), steps=S.paused?0:spf;
+  const readMs=N>6e6?500:N>2e6?350:250, doRead=!benchmarking&&!pending&&now-lastRead>readMs;
+  let fsteps=0;
+  if(avgNeedsClear){enc.clearBuffer(bufs.avg);avgNeedsClear=false;}
+  const wantAvg=S.view==='avg'&&!benchmarking&&settle>=WARM_FT*W/U0;
+  if(wantAvg!==avgAccum){avgAccum=wantAvg;writeParams();}
+  if(steps){
+    // Forces are summed on consecutive step pairs (steps 0 and 1 of every 4). The wall force alternates between
+    // two values from one step to the next, so a pair always averages correctly; batches hold an even number of
+    // steps, so a pair is never split between batches.
+    const wg=Math.ceil(N/128), p=enc.beginComputePass(); p.setPipeline(pipeStep);
+    for(let i=0;i<steps;i++){
+      const last=i===steps-1, pair=(stepCount%4)<2, kind=(doRead&&last)?(pair?2:3):(pair?1:0);
+      if(pair)fsteps++;
+      p.setBindGroup(0,BG[kind][flipPing?1:0]); p.dispatchWorkgroups(wg); flipPing=!flipPing; stepCount++;
+    }
+    p.end(); settle+=steps; if(avgAccum)avgSamples+=fsteps;
+  }
+  // drag and lift after every batch: a 16-byte copy into one of a few small buffers
+  forceSteps+=steps; forceF+=fsteps;
+  let fread=null;
+  if(forceF>0&&forceFree.length){
+    const fb=forceFree.pop(); enc.copyBufferToBuffer(bufs.force,0,fb,0,16); enc.clearBuffer(bufs.force);
+    fread={fb,steps:forceSteps,f:forceF}; forceSteps=0; forceF=0;
+  }
+  let vs=null;
+  if(doRead){
+    vs=readCount%2?bufs.velStage1:bufs.velStage0; readCount++;
+    showingAvg=S.view==='avg'&&avgSamples>0;
+    if(showingAvg){writeParams();const p=enc.beginComputePass();p.setPipeline(pipeAvg);p.setBindGroup(0,BG[0][0]);p.dispatchWorkgroups(Math.ceil(N/128));p.end();}
+    enc.copyBufferToBuffer(bufs.vel,0,vs,0,N*16); pending=true; lastRead=now;
+  }
+  device.queue.submit([enc.finish()]);
+  inFlight++; const myGen=gen;
+  device.queue.onSubmittedWorkDone().then(()=>{
+    if(myGen!==gen)return;
+    const t=performance.now(), busy=inFlight>1&&lastDone>0;
+    inFlight--;
+    if(steps){
+      stepsWindow+=steps; doneSteps+=steps;
+      // with another batch queued behind this one, the time since the previous completion is pure GPU time
+      const ms=busy?t-lastDone:t-now, want=steps*(benchmarking?8:batchMs)/Math.max(.5,ms);
+      spf=Math.max(2,Math.min(256,2*Math.round((spf*0.7+want*0.3)/2)));
+    }
+    lastDone=t;
+    if(fread)fread.fb.mapAsync(GPUMapMode.READ).then(()=>{
+      if(myGen!==gen)return;
+      const F=new Int32Array(fread.fb.getMappedRange()).slice(); fread.fb.unmap(); forceFree.push(fread.fb);
+      onForce(F,fread.steps,fread.f);
+    }).catch(()=>{});
+    if(vs){
+      vs.mapAsync(GPUMapMode.READ).then(()=>{
+        if(myGen!==gen)return;
+        // use the mapped memory directly (no copy); release the previous readback buffer now that it is no longer shown
+        const prev=mappedStage; field=new Float32Array(vs.getMappedRange()); mappedStage=vs;
+        if(prev&&prev!==vs)prev.unmap();
+        pending=false; onField();
+      }).catch(()=>{if(myGen===gen)pending=false;});
+    }
+    scheduleTick();
+  });
+}
+// pacing: if frames start arriving late, the simulation gives the GPU back to drawing (shorter batches, one queued);
+// when drawing is smooth again it ramps back up. The screen's own refresh interval is learned, so 60 and 120 Hz both work.
+function pace(t){
+  if(lastFrameT){const dt=Math.min(100,t-lastFrameT); frameMs+= (dt-frameMs)*0.1; baseMs=Math.max(6,Math.min(baseMs*1.0005,dt));}
+  lastFrameT=t; if(benchmarking)return;
+  if(frameMs>baseMs*1.25){batchMs=Math.max(2,batchMs*0.85); maxInflight=1;}
+  else if(frameMs<baseMs*1.08){batchMs=Math.min(8,batchMs*1.03); if(batchMs>5)maxInflight=2;}
+}
+// moving dashes: the pattern is laid out in travel time, so shifting it at a steady rate moves each dash at the local air speed
+let dashT=0;
+function animateLines(t){
+  const on=S.animate&&S.flow==='lines'; if(lineMat.dashed!==on){lineMat.dashed=on;lineMat.needsUpdate=true;}
+  if(!on)return;
+  const P=(W/10)/U0; lineMat.dashSize=P*0.42; lineMat.gapSize=P*0.58; lineMat.dashScale=1;
+  if(!S.paused&&lastFrameT){dashT=(dashT+Math.min(50,t-lastFrameT)/1000*(W/5)/U0)%P;}
+  lineMat.dashOffset=-dashT;
+}
+function frame(t){
+  animateLines(t); pace(t);
+  simTick();
+  const now=performance.now();
+  if(now-winStart>1000){lastStepsPerSec=stepsWindow/(now-winStart)*1000;stepsWindow=0;winStart=now;}
+  if(visQueue.length)visQueue.shift()();
+  if(S.flow==='parts'&&!S.paused&&field)moveParticles(Math.max(1,lastStepsPerSec/60));
+  controls.update(); renderer.render(scene,viewCam());
+  requestAnimationFrame(frame);
+}
+// ---------- readings: averaging, steadiness, real-world forces ----------
+let stableLatch=false;
+function clearHist(){hist=[];settle=0;cdE=null;stableLatch=false;stableAt=null;precCover=0;clearAvg();if(device&&bufs.params)writeParams();}
+// Average over the last half "flow-through" (time for air to cross half the tunnel).
+// Steady = the average of the older half of that window and the newer half agree within 2%.
+// ---- readings: stability on the last half pass; reported averages with a statistical ± (block averaging)
+let stableAt=null, seCd=0, seCl=0, seCs=0, precCover=0;
+function windowStats(E){
+  // averages weighted by steps, and the standard error from 8 consecutive blocks (blocks longer than the wake's memory)
+  let tot=0;for(const h of E)tot+=h.s;
+  const blk=Array.from({length:8},()=>[0,0,0,0]); let run=0,sx=0,sy=0,sz=0;
+  for(const h of E){const bi=Math.min(7,Math.floor(run/tot*8));blk[bi][0]+=h.x*h.s;blk[bi][1]+=h.y*h.s;blk[bi][2]+=h.z*h.s;blk[bi][3]+=h.s;sx+=h.x*h.s;sy+=h.y*h.s;sz+=h.z*h.s;run+=h.s;}
+  const B=blk.filter(v=>v[3]), m=[sx/tot,sy/tot,sz/tot];
+  const seB=j=>B.length>2?Math.sqrt(B.reduce((p,v)=>p+(v[j]/v[3]-m[j])**2,0)/(B.length-1)/B.length):0;
+  // eight blocks only count as independent when each is longer than the wake's memory; a shedding wake can take
+  // most of a pass of air per cycle. So the ± also uses the measured memory (integrated autocorrelation time, Geyer's
+  // initial positive sequence) and takes the larger of the two. A memory longer than the window gives the full spread.
+  const nb=Math.min(64,E.length), bins=Array.from({length:nb},()=>[0,0,0,0]); run=0;
+  for(const h of E){const bi=Math.min(nb-1,Math.floor((run+h.s/2)/tot*nb));const v=bins[bi];v[0]+=h.x*h.s;v[1]+=h.y*h.s;v[2]+=h.z*h.s;v[3]+=h.s;run+=h.s;}
+  const Bn=bins.filter(v=>v[3]);
+  const seA=j=>{const n=Bn.length; if(n<8)return 0; const y=Bn.map(v=>v[j]/v[3]-m[j]), c0=y.reduce((p,v)=>p+v*v,0)/n; if(c0<=0)return 0;
+    const rho=k=>{let s=0;for(let i=0;i+k<n;i++)s+=y[i]*y[i+k];return s/n/c0;};
+    let t=-1,lag=0,ok=false; while(2*lag+1<n/4){const G=rho(2*lag)+rho(2*lag+1); if(G<=0){ok=true;break;} t+=2*G; lag++;}
+    if(!ok)t=n; return Math.sqrt(c0*Math.max(1,Math.min(n,t))/n);};
+  const se=j=>Math.max(seB(j),seA(j));
+  return {tot,cd:m[0],cl:m[1],cs:m[2],seCd:se(0),seCl:se(1),seCs:se(2)};
+}
+// The wake of a bluff body takes about a pass of air to form, and on the way its drag can sit in a flat dip that looks
+// steady. So readings start after WARM_FT passes, and steadiness compares two consecutive half passes.
+const WARM_FT=1.0, PREC_MAX=4, PREC_MIN=2, PREC_TARGET=0.01;
+function judge(){
+  const FT=W/U0, win=0.5*FT, warm=WARM_FT*FT, precWin=PREC_MAX*FT;
+  // keep enough history for the precise average plus the stability windows
+  let keep=0,k=hist.length; while(k>0&&keep<precWin+2*win){k--;keep+=hist[k].s;}
+  if(k>0)hist.splice(0,k);
+  let tot=0;k=hist.length; while(k>0&&tot<2*win){k--;tot+=hist[k].s;}
+  const st=$('status'), note=$('statusNote');
+  if(tot<2*win){
+    const pc=Math.min(99,Math.round((settle)/(warm+2*win)*100));
+    st.className='chip wait'; st.textContent='settling '+pc+'%'; note.textContent=settle<warm?'air still filling the tunnel':'wake forming'; setStable('settle',pc/100);
+    ['cd','cl','cs'].forEach(i=>$(i).textContent='–'); $('cdVar').innerHTML='&nbsp;'; cdE=null; stableAt=null; showReal(); updateCompare(); return;
+  }
+  // A = the older half pass, B = the newest half pass
+  const AB=hist.slice(k); let run=0,cut=0; while(cut<AB.length&&run<tot/2){run+=AB[cut].s;cut++;}
+  const WA=AB.slice(0,cut), W5=AB.slice(cut), wa=windowStats(WA), wb=windowStats(W5);
+  let mn=1e9,mx=-1e9; for(const h of W5){mn=Math.min(mn,h.x);mx=Math.max(mx,h.x);}
+  // stable when the two half passes agree within 2%, or within their combined averaging uncertainty (a wake that keeps
+  // swinging without trending counts as stable); once stable, only a change of more than 10% (or a setting change) resets it
+  const diff=Math.abs(wb.cd-wa.cd), drift=diff/Math.max(0.05,Math.abs(wb.cd)), noise=Math.hypot(wa.seCd,wb.seCd);
+  // since stable: everything from the start of the steady half pass (up to PREC_MAX passes)
+  const sinceStable=()=>{let pos=settle,r=[];for(let i=hist.length-1;i>=0;i--){const h=hist[i];if(pos-h.s<stableAt)break;r.unshift(h);pos-=h.s;}return r;};
+  let steadyNow, ws=null;
+  if(stableLatch&&stableAt!==null){
+    // once stable, the wake's slow swings are part of the average, not a reason to start over. Any setting change
+    // restarts the readings anyway; this only catches a real jump of the flow away from its running average.
+    const r=sinceStable(); ws=r.length>=W5.length?windowStats(r):wb;
+    const jump=Math.abs(wb.cd-ws.cd); steadyNow=jump<Math.max(0.15*Math.max(0.05,Math.abs(ws.cd)),4*Math.hypot(wb.seCd,ws.seCd));
+  } else steadyNow=drift<0.02||diff<noise;
+  stableLatch=steadyNow;
+  // averaging for Precise readings starts with the newest half pass, never in the start-up transient
+  if(steadyNow&&stableAt===null)stableAt=settle-wb.tot; if(!steadyNow){stableAt=null;ws=null;}
+  // reported average: the last half pass, or with Precise, everything since the flow became stable
+  let rs=wb; precCover=0;
+  const precise=S.precise||(V&&S.bench);
+  if(precise&&stableAt!==null){if(!ws){const r=sinceStable();ws=r.length>=W5.length?windowStats(r):wb;} rs=ws; precCover=rs.tot/FT;}
+  cdE=rs.cd; clE=rs.cl; csE=rs.cs; seCd=rs.seCd; seCl=rs.seCl; seCs=rs.seCs;
+  const swing=(mx-mn)/2/Math.max(0.05,Math.abs(cdE));
+  $('cd').textContent='≈ '+sig2(cdE)+' ± '+sig1(seCd); $('cl').textContent='≈ '+sig2(clE)+' ± '+sig1(seCl); $('cs').textContent='≈ '+sig2(csE)+' ± '+sig1(seCs);
+  $('liftLab').textContent=clE<0?'Downforce Cl':'Lift Cl';
+  $('cdVar').textContent=`± is the averaging uncertainty · wake swings ±${Math.round(swing*100)}%`;
+  if(steadyNow){st.className='chip go';st.textContent='steady';
+    note.textContent=S.precise?(preciseDone()?'precise average complete':`precise average · ${precCover.toFixed(1)} of ${PREC_MIN}–${PREC_MAX} passes · ±${(seCd/Math.max(0.05,Math.abs(cdE))*100).toFixed(1)}%`):'safe to compare';setStable('stable',1);}
+  else{st.className='chip wait';st.textContent='drifting '+Math.round(drift*100)+'%';note.textContent='still changing, keep running';setStable('almost',Math.max(.9,Math.min(.98,1-drift)));}
+  showReal(); updateCompare();
+}
+// Precise average is done after PREC_MIN passes once its ± is within the target, or after PREC_MAX passes
+function preciseDone(target=PREC_TARGET){
+  if(cdE===null||stableAt===null)return false;
+  return precCover>=PREC_MAX||(precCover>=PREC_MIN&&seCd<=target*Math.max(0.05,Math.abs(cdE)));
+}
+// one significant figure for ± values
+const sig1=v=>{if(!isFinite(v)||v<=0)return '0';const e=Math.floor(Math.log10(v));return v.toFixed(Math.max(0,-e));};
+const RHO_AIR=1.225;
+// two significant figures: the precision the validation supports
+const sig2=v=>{if(!isFinite(v))return '–';if(Math.abs(v)<1e-9)return '0';return Math.abs(v)>=100?Number(v.toPrecision(2)).toLocaleString('en-US'):v.toPrecision(2);};
+function bandText(){
+  const top=vResults.length?Math.max(...vResults.map(r=>r.res)):-1, rows=vResults.filter(r=>r.res===top&&r.err!==null&&r.c!=='sphere200');
+  if(rows.length){const lo=Math.min(...rows.map(r=>r.err)),hi=Math.max(...rows.map(r=>r.err)),f=v=>Math.round(Math.abs(v)*100)+'% '+(v<0?'low':'high');
+    return `Validation run in this session (${RNAME[top]} resolution): simple benchmark shapes read between ${f(lo)} and ${f(hi)}. In earlier validation, vehicle-like shapes (Ahmed body) read about two to three times the published drag. Treat these numbers as rough; do not quote them as your design's real drag.`;}
+  return 'Validation (24 Oct 2026, Ultra resolution, 16-bit): simple benchmark shapes read between 25% low and 18% high; vehicle-like shapes (Ahmed body) read about two to three times the published drag. Treat these numbers as rough; do not quote them as your design\'s real drag.';
+}
+function showReal(){
+  const V=S.speed/3.6, qd=0.5*RHO_AIR*V*V, m=S.len/(S.size*W), A=frontal*m*m;
+  $('area').textContent=modelBox?'≈ '+sig2(A)+' m²':'–';
+  $('areaNote').textContent=modelBox?'from '+S.len+' m length':'measured from model';
+  const bl=W?frontal/(H*D):0; $('block').textContent=modelBox?Math.round(bl*100)+'%':'–';
+  $('blockNote').textContent=bl>0.1?'high: walls raise drag; lower the scale':'of the tunnel cross-section';
+  $('band').textContent=bandText();
+  // legends in real units
+  if(MODE==='design'){$('pLo').textContent='low';$('pHi').textContent='high';}
+  else{$('pLo').textContent=Math.round(-1.5*qd)+' Pa'; $('pHi').textContent='+'+Math.round(qd)+' Pa';}
+  $('vHi').textContent=Math.round(S.speed*1.6)+' km/h';
+  const re=V*S.len/NU_AIR, fr=v=>v>=1e6?(v/1e6).toFixed(1)+' M':Math.round(v/1e3)+' k'; $('re').textContent=fr(re)+(simRe?(S.wm&&Math.abs(simRe/re-1)<0.05?' (simulated)':' · sim '+fr(simRe)):'');
+  if(cdE===null){['dragN','dragKW','liftN'].forEach(i=>$(i).textContent='–');['dragKg','dragHp','liftKg'].forEach(i=>$(i).innerHTML='&nbsp;');return;}
+  const Fd=cdE*qd*A, Fl=clE*qd*A, P=Fd*V/1000;
+  const fmtN=f=>'≈ '+(Math.abs(f)>=1000?sig2(f/1000)+' kN':sig2(f)+' N');
+  $('dragN').textContent=fmtN(Fd); $('dragKg').textContent='like '+sig2(Fd/9.81)+' kg pushing back';
+  $('dragKW').textContent='≈ '+sig2(P)+' kW'; $('dragHp').textContent=sig2(P*1.341)+' hp';
+  $('liftNLab').textContent=Fl<0?'Downforce':'Lift force'; $('liftN').textContent=fmtN(Math.abs(Fl)); $('liftKg').textContent=sig2(Math.abs(Fl)/9.81)+' kg '+(Fl<0?'pressing down':'lifting');
+}
+// ---------- baseline comparison ----------
+// Compares drag force (Cd x frontal area), so designs with different frontal areas compare fairly.
+// a drag difference counts when it is larger than twice the combined ± of both runs, and at least 3%
+const CMP_FLOOR=0.03, LIFT_THRESH=0.15; let base=null;
+function sameSetup(){
+  const d=[]; if(base.res!==S.res)d.push('resolution'); if(Math.abs(base.size-S.size)>1e-6)d.push('scale in tunnel');
+  if(base.speed!==S.speed)d.push('air speed'); if(Math.abs(base.len-S.len)>1e-9)d.push('real length'); if(base.ground!==S.ground)d.push('road floor'); if(base.wm!==S.wm||base.nwd!==S.nwd)d.push('surface layer'); return d;
+}
+function compareResult(){
+  if(!base)return {main:'No baseline yet',note:cdE===null?'Wait for readings, then set this design as the baseline.':'Set this design as the baseline, change one thing, then compare.'};
+  if(cdE===null)return {main:'Waiting for readings',note:'The flow is still settling after the change.'};
+  const diff=sameSetup(); if(diff.length)return {main:'Not comparable',note:'The baseline used a different '+diff.join(', ')+'. Match it to compare.'};
+  const d=(cdE*frontal-base.cdA)/Math.abs(base.cdA), dl=(clE*frontal-base.clA)/Math.abs(base.cdA), steady=$('status').textContent==='steady'&&base.steady;
+  const sig=Math.sqrt((seCd*frontal)**2+base.seA**2)/Math.abs(base.cdA), range=2*sig, thr=Math.max(CMP_FLOOR,range);
+  const pc=v=>Math.round(Math.abs(v)*100), measured=`Measured ${d<0?'−':'+'}${pc(d)}% ± ${Math.max(1,pc(range))}%`;
+  let main,note;
+  if(Math.abs(d)<thr){main='No clear difference';
+    note=`${measured}. That is within ${range>CMP_FLOOR?'the averaging range of both runs':'3%, below what the tunnel can reliably tell apart'}.`+(range>CMP_FLOOR&&!S.precise?' Precise averaging narrows the range.':'');}
+  else{main=`About ${pc(d)}% ${d<0?'less':'more'} drag`;note=`${measured}: a clear difference in direction; the exact size is rough.`;}
+  if(dl<=-LIFT_THRESH)note+=' Clearly more downforce than the baseline.'; else if(dl>=LIFT_THRESH)note+=' Clearly more lift than the baseline.';
+  if(!steady)note+=' Not steady yet, so this may still change.';
+  return {main,note};
+}
+function updateCompare(){
+  const r=compareResult(); $('cmpMain').textContent=r.main; $('cmpNote').textContent=r.note;
+  $('setBase').disabled=cdE===null; $('clearBase').disabled=!base;
+}
+function setBaseline(){
+  if(cdE===null)return;
+  base={cdA:cdE*frontal,clA:clE*frontal,seA:seCd*frontal,res:S.res,size:S.size,speed:S.speed,len:S.len,ground:S.ground,wm:S.wm,nwd:S.nwd,steady:$('status').textContent==='steady',
+    label:`${S.name} · yaw ${S.yaw}° · pitch ${S.pitch}° · height ${Math.round(S.h*100)}%`};
+  $('baseName').textContent=base.label+(base.steady?'':' (not steady when set)'); updateCompare();
+}
+$('setBase').onclick=setBaseline;
+$('clearBase').onclick=()=>{base=null;$('baseName').innerHTML='&nbsp;';updateCompare();};
+function onForce(F,steps,fsteps){
+  if(steps>0&&fsteps>0&&settle>=W/U0*WARM_FT){
+    const q=0.5*U0*U0*frontal;
+    hist.push({s:steps,x:F[0]/2e4/fsteps/q,y:F[1]/2e4/fsteps/q,z:F[2]/2e4/fsteps/q});
+  }
+  const t=performance.now(); if(t-lastJudge>150){lastJudge=t;judge();validationTick();}
+}
+function onField(){
+  // unstable flow shows up as NaN density: restart the flow instead of showing garbage
+  for(let i=3;i<field.length;i+=4*997){const r=field[i];if(!(r>0.2&&r<5)){S.damp=Math.min(8,S.damp*1.6);updateTau();resetFlow();field=null;note='Flow turned unstable, so it restarted with extra damping ('+S.damp.toFixed(1)+'×).';noteUntil=performance.now()+8000;$('hud').textContent=note;return;}}
+  avgNote();
+  visQueue=[()=>{if(S.surf)paintSurface();},()=>{if(S.flow==='lines')traceLines();},()=>paintSlice()];
+  {const r=lastStepsPerSec*N/1e6;$('fps').textContent=S.paused?'paused':(r>=10?r.toFixed(0):r.toFixed(2))+' M cells/s';}
+  $('hud').textContent=performance.now()<noteUntil?note:MODE==='design'?`${S.speed} km/h`:`${W}×${H}×${D} grid · ${(N/1e6).toFixed(2)} M cells · ${S.speed} km/h`+(S.damp>1?` · damping ${S.damp.toFixed(1)}×`:'');
+}
+
+
+// ---------- PDF report ----------
+let downloads=null;
+// inside Claude, saving goes through the viewer's save prompt; as a standalone file, it is a normal browser download
+const localSaver={save:async({filename,data})=>{const blob=data instanceof Blob?data:new Blob([data]);const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);return {status:'saved'};}};
+(window.claude&&window.claude.use?window.claude.use('downloads'):Promise.resolve(localSaver)).then(d=>{downloads=d;if(d)$('exportGrp').hidden=false;}).catch(()=>{});
+function captureView(cam,w,h){
+  const dashWas=lineMat.dashed; if(dashWas){lineMat.dashed=false;lineMat.needsUpdate=true;}
+  const sliceWas=sliceMesh?sliceMesh.visible:false; if(sliceMesh)sliceMesh.visible=false;
+  const C=viewCam(), pr=renderer.getPixelRatio(), keepPos=C.position.clone(), keepZoom=C.zoom, keepT=controls.target.clone(), keepCam=curCam;
+  renderer.setPixelRatio(1); renderer.setSize(w,h,false); viewAspect=w/h; camera.aspect=w/h; camera.updateProjectionMatrix(); lineRes(w/Math.max(1,$('tunnel').clientWidth));
+  setCam(cam); renderer.render(scene,viewCam());
+  const url=renderer.domElement.toDataURL('image/jpeg',0.9);
+  renderer.setPixelRatio(pr); C.position.copy(keepPos); C.zoom=keepZoom; controls.target.copy(keepT); curCam=keepCam;
+  document.querySelectorAll('#cams button[data-c]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.c===keepCam));
+  if(sliceMesh)sliceMesh.visible=sliceWas;
+  if(dashWas){lineMat.dashed=true;lineMat.needsUpdate=true;}
+  resize(); controls.update();
+  renderer.render(scene,viewCam());
+  return url;
+}
+// a 2D cut through the stored flow field: 'side' = x-y plane at z=k, 'top' = x-z plane at y=k
+function sectionImage(plane,mode,k){
+  const tw=W, th=plane==='side'?H:D, q=0.5*U0*U0, c=document.createElement('canvas'); c.width=tw; c.height=th;
+  const x=c.getContext('2d'), id=x.createImageData(tw,th);
+  for(let j=0;j<th;j++)for(let i=0;i<tw;i++){
+    const cell=plane==='side'?i+W*(j+H*k):i+W*(k+H*j), o=(plane==='side'?(th-1-j)*tw+i:j*tw+i)*4;
+    if(solid[cell]){id.data[o]=226;id.data[o+1]=229;id.data[o+2]=234;id.data[o+3]=255;continue;}
+    const f=cell*4, v=mode==='vel'?Math.hypot(field[f],field[f+1],field[f+2])/(U0*1.6):((field[f+3]-1)/3/q+1.5)/2.5, l=li(v);
+    id.data[o]=RAIN[l]*255;id.data[o+1]=RAIN[l+1]*255;id.data[o+2]=RAIN[l+2]*255;id.data[o+3]=255;
+  }
+  x.putImageData(id,0,0);
+  const big=document.createElement('canvas'); big.width=tw*5; big.height=th*5;
+  const bx=big.getContext('2d'); bx.imageSmoothingEnabled=true; bx.drawImage(c,0,0,big.width,big.height);
+  return {url:big.toDataURL('image/jpeg',0.9),ratio:th/tw};
+}
+function barImage(){const c=document.createElement('canvas');c.width=256;c.height=1;const x=c.getContext('2d'),d=x.createImageData(256,1);
+  for(let i=0;i<256;i++){d.data[i*4]=RAIN[i*3]*255;d.data[i*4+1]=RAIN[i*3+1]*255;d.data[i*4+2]=RAIN[i*3+2]*255;d.data[i*4+3]=255;}
+  x.putImageData(d,0,0);return c.toDataURL('image/png');}
+const pdfTxt=t=>String(t).replace(/≈ ?/g,'~ ').replace(/²/g,'^2').replace(/³/g,'^3').replace(/[–—]/g,'-').replace(/−/g,'-').replace(/·/g,'-').replace(/→/g,'->').replace(/[^\x20-\x7E\xA0-\xFF]/g,'');
+async function exportPDF(){
+  const note=$('pdfNote');
+  if(!field||!modelBox){note.textContent='Wait until the flow has started, then export again.';return;}
+  if(!window.jspdf){note.textContent='The PDF library did not load. Reload the page and try again.';return;}
+  $('pdf').disabled=true; note.textContent='Building report…';
+  try{
+    const {jsPDF}=window.jspdf, doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
+    const ink=[24,30,40], dim=[110,120,135], acc=[20,120,190], now=new Date();
+    const V=S.speed/3.6, qd=0.5*RHO_AIR*V*V, m=S.len/(S.size*W);
+    const head=(title,sub)=>{doc.setFillColor(13,17,23);doc.rect(0,0,297,16,'F');doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(13);
+      doc.text('SLIPSTREAM 3D TUNNEL  -  '+title,12,10.5);doc.setFont('helvetica','normal');doc.setFontSize(9);doc.text(pdfTxt(sub),285,10.5,{align:'right'});};
+    const table=(x,y,title,rows,w)=>{doc.setTextColor(...acc);doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text(title.toUpperCase(),x,y);y+=2;
+      doc.setDrawColor(210,215,222);doc.line(x,y,x+w,y);y+=4.6;doc.setFontSize(9);
+      for(const [k,v] of rows){doc.setFont('helvetica','normal');doc.setTextColor(...dim);doc.text(pdfTxt(k),x,y);doc.setTextColor(...ink);doc.setFont('helvetica','bold');doc.text(pdfTxt(v),x+w,y,{align:'right'});y+=5;}
+      return y+3;};
+    const sub=S.name+'  -  '+now.toLocaleString();
+    // ----- page 1: setup, results, views
+    head('WIND TUNNEL REPORT',sub);
+    const ready=cdE!==null, na='not ready yet', val=id=>ready?$(id).textContent:na;
+    const status=$('status').textContent+(ready?'':' (values not final)');
+    let y=table(12,26,'Setup',[
+      ['Model',S.name],['Flow view',showingAvg?'time-averaged ('+(avgSamples*4/(W/U0)).toFixed(1)+' passes)':'live'],['Real length',S.len+' m'],['Air speed',S.speed+' km/h ('+V.toFixed(1)+' m/s)'],
+      ['Resolution',RNAME[S.res]+'  '+W+'x'+H+'x'+D+(S.f16?', 16-bit':', 32-bit')],['Scale in tunnel',Math.round(S.size*100)+'%'],
+      ['Height above floor',Math.round(S.h*100)+'%'],['Yaw / pitch',S.yaw+'° / '+S.pitch+'°'],['Road floor',S.ground?'moving':'fixed'],['Surface layer',surfText()],
+      ...(S.damp>1?[['Extra damping',S.damp.toFixed(1)+'x']]:[])],80);
+    const cmp=compareResult();
+    y=table(12,y,'Result',[['Readings',status],['Compared with baseline',cmp.main]],80);
+    doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(...dim);
+    {const L=doc.splitTextToSize(pdfTxt(cmp.note+(base?' Baseline: '+base.label+'.':'')),80);doc.text(L,12,y-1);y+=L.length*3.4+2;}
+    const v3=captureView('3d',1400,800), vs=captureView('side',1000,520), vt=captureView('top',1000,520), vf=captureView('front',1000,520);
+    doc.addImage(v3,'JPEG',100,22,185,105.7);
+    const sw=60.3, sh=sw*0.52;
+    [[vs,'Side'],[vt,'Top'],[vf,'Front']].forEach(([u,l],i)=>{const x=100+i*(sw+2.05);doc.addImage(u,'JPEG',x,131,sw,sh);
+      doc.setFillColor(13,17,23);doc.rect(x,131,16,6,'F');doc.setTextColor(255,255,255);doc.setFontSize(8);doc.setFont('helvetica','bold');doc.text(l.toUpperCase(),x+2,135.2);});
+    const bar=barImage(), legend=(x,y,w,label,lo,hi)=>{doc.setTextColor(...dim);doc.setFont('helvetica','normal');doc.setFontSize(8);doc.text(label,x,y);
+      doc.addImage(bar,'PNG',x,y+1.5,w,3);doc.text(pdfTxt(lo),x,y+8.5);doc.text(pdfTxt(hi),x+w,y+8.5,{align:'right'});};
+    legend(100,170,88,'Surface pressure (Cp -1.5 to +1.0)',Math.round(-1.5*qd)+' Pa','+'+Math.round(qd)+' Pa');
+    legend(197,170,88,'Streamline air speed',(0)+' km/h',Math.round(S.speed*1.6)+' km/h');
+    doc.setFont('helvetica','normal');doc.setFontSize(7.5);doc.setTextColor(...dim);
+    doc.text(doc.splitTextToSize('The flow pictures are the main result. Design changes are judged against a baseline run at the same resolution, scale, speed and real length; a drag difference is reported once it exceeds twice the combined averaging uncertainty of both runs and at least 3%. Rough absolute values, with the validation error band, are in the appendix.',80),12,y+2);
+    // ----- page 2: centerline sections
+    doc.addPage(); head('2D SECTIONS',sub);
+    const zc=Math.min(D-1,Math.round((modelBox.zmin+modelBox.zmax)/2)), yc=Math.min(H-1,Math.max(0,Math.round(modelBox.ymin+(modelBox.ymax-modelBox.ymin)*0.4)));
+    const secs=[[sectionImage('side','vel',zc),'Side cut through model centerline - air speed'],[sectionImage('side','pres',zc),'Side cut through model centerline - pressure'],
+      [sectionImage('top','vel',yc),'Top cut at 40% of model height - air speed'],[sectionImage('top','pres',yc),'Top cut at 40% of model height - pressure']];
+    const cw=134, gx=12, gy=24;
+    secs.forEach(([im,l],i)=>{const x=gx+(i%2)*(cw+5), hh=cw*im.ratio, yy=gy+Math.floor(i/2)*(cw*0.5+16);
+      doc.setTextColor(...ink);doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text(l,x,yy);
+      doc.addImage(im.url,'JPEG',x,yy+2,cw,hh);
+      doc.setTextColor(...dim);doc.setFont('helvetica','normal');doc.setFontSize(7.5);doc.text('wind ->',x+1,yy+hh+5.5);});
+    legend(12,186,134,'Air speed in sections',(0)+' km/h',Math.round(S.speed*1.6)+' km/h');
+    legend(151,186,134,'Pressure in sections (Cp -1.5 to +1.0)',Math.round(-1.5*qd)+' Pa','+'+Math.round(qd)+' Pa');
+    // ----- page 3: appendix with rough absolute values and the error band
+    doc.addPage(); head('APPENDIX - ENGINEERING DETAILS',sub);
+    let ay=26; doc.setDrawColor(230,160,40); doc.setLineWidth(1); 
+    {doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...ink);const L=doc.splitTextToSize(pdfTxt(bandText()),265);doc.line(12,ay-3.5,12,ay+L.length*4-2);doc.text(L,15,ay);ay+=L.length*4+6;}
+    doc.setLineWidth(.2);
+    ay=table(12,ay,'Rough absolute values (two significant figures)',[
+      ['Readings',status],['Drag coefficient Cd',ready?$('cd').textContent+'  ('+$('cdVar').textContent.trim()+')':na],
+      [$('liftLab').textContent,val('cl')],['Side force Cs',val('cs')],
+      ['Drag force',val('dragN')],['Power to push air',ready?$('dragKW').textContent+'  ('+$('dragHp').textContent+')':na],
+      [$('liftNLab').textContent,val('liftN')],['Frontal area',$('area').textContent],
+      ['Tunnel blockage',$('block').textContent+(frontal/(H*D)>0.1?' (high: raises drag)':'')],['Real Reynolds number',$('re').textContent]],130);
+    if(vResults.length){ay=table(12,ay,'Validation in this session',[],130)-6;doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(...ink);
+      for(const el of $('vSum').children){const L=doc.splitTextToSize(pdfTxt(el.textContent),265);doc.text(L,12,ay);ay+=L.length*3.6+1.5;}ay+=3;}
+    doc.setFont('helvetica','normal');doc.setFontSize(7.5);doc.setTextColor(...dim);
+    doc.text(doc.splitTextToSize('Method: D3Q19 Lattice Boltzmann with regularized collision, Smagorinsky turbulence model (Cs 0.1) and curved-wall bounce-back, '+(S.wm?'at the real Reynolds number with a wall model (Spalding law of the wall)':'at a scaled-down Reynolds number')+(S.nwd?' and near-wall damping':'')+'. Coefficients are averaged over half a tunnel flow-through and use the measured frontal area. Real-world forces use sea-level air (1.225 kg/m^3), the entered real length and the air speed. Not certified values.',265),12,ay+2);
+    const safe=S.name.replace(/\.[a-z0-9]+$/i,'').replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'').toLowerCase()||'model';
+    const res=await downloads.save({filename:`slipstream-${safe}-${S.speed}kmh.pdf`,data:doc.output('blob')});
+    note.textContent=(res.status==='saved'?'Report saved.':'Report sent.')+(ready&&$('status').textContent==='steady'?'':' Readings were not steady yet, so values are marked as not final.');
+  }catch(e){
+    const c=e&&e.code;
+    note.textContent=c==='declined'?'Save cancelled.':c==='rate_limited'?'A save prompt is already open. Finish it, then try again.':'Could not create the report'+(e&&e.message?': '+e.message:'.');
+  }finally{$('pdf').disabled=false;}
+}
+$('pdf').onclick=exportPDF;
+
+
+// ================= validation against published benchmarks =================
+// Sphere: Morrison's drag correlation (as implemented in the open-source `fluids` library), evaluated at the simulated Reynolds number.
+const morrison=Re=>24/Re+2.6*Re/5/(1+(Re/5)**1.52)+0.411*(Re/263000)**-7.94/(1+(Re/263000)**-8)+Re**0.8/461000;
+const MASKELL=2.5; // blockage correction factor for bluff bodies
+// Ahmed body (Ahmed, Ramm & Faltin 1984), in mm. Legs omitted; body held at its 50 mm clearance.
+const AH={L:1044,W:389,H:288,R:100,Ls:222,gap:50};
+function ahmedMeshes(phi){
+  const {L,W:Wb,H:Hb,R,Ls}=AH, mat=surfMat(), out=[], t=phi*Math.PI/180, sh=new THREE.Shape();
+  sh.moveTo(R,0); sh.lineTo(L,0);
+  if(phi>0){sh.lineTo(L,Hb-Ls*Math.sin(t)); sh.lineTo(L-Ls*Math.cos(t),Hb);} else sh.lineTo(L,Hb);
+  sh.lineTo(R,Hb); sh.lineTo(R,0);
+  const g=new THREE.ExtrudeGeometry(sh,{depth:Wb,bevelEnabled:false}); g.translate(0,0,-Wb/2); out.push(new THREE.Mesh(g,mat));
+  // rounded nose (radius 100 on all four front edges) built from a centre slab, edge cylinders and corner spheres
+  const add=(geo,x,y,z,rx)=>{const m=new THREE.Mesh(geo,mat);m.position.set(x,y,z);if(rx)m.rotation.x=rx;out.push(m);};
+  add(new THREE.BoxGeometry(R+2,Hb-2*R,Wb-2*R),(R+2)/2,Hb/2,0);
+  for(const y of [R,Hb-R])add(new THREE.CylinderGeometry(R,R,Wb-2*R,48),R,y,0,Math.PI/2);
+  for(const z of [Wb/2-R,-(Wb/2-R)])add(new THREE.CylinderGeometry(R,R,Hb-2*R,48),R,Hb/2,z);
+  for(const y of [R,Hb-R])for(const z of [Wb/2-R,-(Wb/2-R)])add(new THREE.SphereGeometry(R,32,24),R,y,z);
+  return out;
+}
+const BENCH={
+  sphere200:{name:'Sphere, Re 200',build:()=>[new THREE.Mesh(new THREE.SphereGeometry(.5,72,48),surfMat())],af:Math.PI/4,refLen:1,re:200,block:.05,center:true,
+    ref:re=>morrison(re),across:'diameter',refText:'Solver check: at Re 200 the grid resolves the flow, so the error shows the numerical method itself (standard sphere drag curve)'},
+  sphere:{name:'Sphere, Re 5,000',build:()=>[new THREE.Mesh(new THREE.SphereGeometry(.5,72,48),surfMat())],af:Math.PI/4,refLen:1,re:5000,block:.05,center:true,
+    ref:re=>morrison(re),across:'diameter',refText:'Operating-regime check: at Re 5,000 the layer of air on the surface is thinner than one cell, which tests how the tunnel copes with that (standard sphere drag curve)'},
+  plate:{name:'Square plate',build:()=>[new THREE.Mesh(new THREE.BoxGeometry(.1,1,1),surfMat())],af:100,refLen:10,re:5000,block:.05,center:true,
+    ref:()=>1.28,reWM:1e6,across:'side',refText:'1.28, flat plate facing the flow (NASA Glenn Research Center)'},
+  cube:{name:'Cube, face on',build:()=>[new THREE.Mesh(new THREE.BoxGeometry(1,1,1),surfMat())],af:1,refLen:1,re:5000,block:.05,center:true,
+    ref:()=>1.05,reWM:1e6,across:'side',refText:'about 1.05, the commonly cited value for a cube facing the flow (Hoerner)'},
+  ahmed:{name:'Ahmed body',angles:[0,12.5,25,30,35],build:phi=>ahmedMeshes(phi),af:AH.W*AH.H/(AH.L*AH.L),refLen:1,re:30000,block:.06,ground:true,
+    ref:null,reWM:4.29e6,refWM:(re,a)=>a===25?0.285:null,across:'length',refText:'Trend check against Ahmed et al. (1984): lowest drag near 12°, peak at 30°, sharp drop above 30°',
+    refTextWM:'0.285 at 25° slant (Ahmed, Ramm and Faltin 1984, at their test Reynolds number of 4.29 million), and the trend for the other angles: lowest drag near 12°, peak at 30°, sharp drop above 30°'}
+};
+const VCOL={sphere200:'#e66767',sphere:'#3987e5',plate:'#d95926',cube:'#199e70'}, RCOL=['#1f4a85','#2a6fc9','#5a9be8','#a9cdf7'], RNAME=['Low','Medium','High','Ultra'];
+let V=null, vResults=[], vSaved=null;
+function startValidation(){
+  const sel=$('vCase').value, cases=sel==='all'?['sphere200','sphere','plate','cube','ahmed']:[sel];
+  // the three finest grids this GPU can hold: Medium, High, Ultra (or Low, Medium, High without room for Ultra)
+  const fine=[1,2,3].filter(fitsRes), resList=$('vGrid').checked?(fine.length===3?fine:[0,1,2].filter(fitsRes)):[S.res];
+  if(!device){$('vNote').textContent='Validation needs the GPU simulation, which is not running in this browser.';return;}
+  if(!vSaved)vSaved={preset:S.preset,name:S.name,len:S.len,size:S.size,h:S.h,yaw:S.yaw,pitch:S.pitch,ground:S.ground,res:S.res,speed:S.speed,file:!S.preset&&!!S.meshTris};
+  const jobs=[]; for(const r of resList)for(const c of cases)for(const a of (BENCH[c].angles||[null]))jobs.push({res:r,c,a});
+  V={jobs,i:0}; vResults=[]; S.paused=false; $('wallMode').querySelectorAll('button').forEach(b=>b.disabled=true); $('nwd').disabled=true; $('pause').textContent='Pause'; $('pause').setAttribute('aria-pressed',false);
+  $('vRun').textContent='Stop validation'; $('vSec').hidden=false; $('vBack').hidden=false; $('vPdf').hidden=true;
+  startJob(); renderValidation();
+}
+function stopValidation(msg){V=null;$('wallMode').querySelectorAll('button').forEach(b=>b.disabled=false);$('nwd').disabled=false;$('vRun').textContent='Run validation';$('vNote').textContent=msg||'Validation stopped.';$('vProg').textContent='';if(vResults.length)$('vPdf').hidden=false;}
+function startJob(){
+  const j=V.jobs[V.i], B=BENCH[j.c];
+  if(S.res!==j.res){S.res=j.res;press('res','r',S.res);alloc();}
+  S.bench=B; S.damp=1; S.preset=''; press('presets','p','');
+  S.name=B.name+(j.a!==null?' '+j.a+'°':''); S.len=j.c==='ahmed'?AH.L/1000:.1;
+  S.size=Math.sqrt(B.block*H*D/B.af)/W; S.yaw=0; S.pitch=0; S.ground=!!B.ground;
+  setModel(B.build(j.a));
+  const Lc=S.size*W;
+  S.h=B.center?Math.max(0,(H/2-S.modelHN*Lc/2-.6)/H):Math.max(0,(AH.gap/AH.L*Lc-.6)/H);
+  placeModel(); syncUI(); needVox=true; writeParams(); resetFlow();
+}
+function validationTick(){
+  if(!V||needVox)return;
+  const j=V.jobs[V.i], B=BENCH[j.c], limit=(WARM_FT+1+PREC_MAX+1)*W/U0;
+  $('vProg').textContent=`Run ${V.i+1} of ${V.jobs.length} · ${S.name} · ${RNAME[j.res]} · surface: ${surfText()} · ${$('status').textContent}`;
+  $('vNote').textContent=`Running. Each case waits for the wake to form and settle, then averages at least ${PREC_MIN} passes of air (up to ${PREC_MAX} for a restless wake, until the ± is within 1.5%); a case that never settles is averaged at the time limit.`;
+  if(cdE===null)return;
+  const steady=$('status').textContent==='steady'; if(!(steady&&preciseDone(0.015))&&settle<limit)return;
+  // report the Reynolds number the solver actually ran (the viscosity floor can lower it on coarse grids)
+  // Cd and blockage use the frontal area of the body as simulated (its cells), so grid rounding of the shape does not bias the result
+  const Lc=S.size*W, cd=cdE, block=frontal/(H*D), cdC=cd/(1+MASKELL*cd*block), re=U0*B.refLen*Lc/nuMol;
+  const refF=S.wm&&B.refWM?B.refWM:B.ref, ref=refF?refF(re,j.a):null;
+  const seC=seCd*cdC/Math.max(1e-9,cd);
+  vResults.push({c:j.c,a:j.a,res:j.res,cells:B.refLen*Lc,re,cd,cdC,seC,block,ref,err:ref?(cdC-ref)/ref:null,steady,passes:precCover,wm:S.wm,nwd:S.nwd});
+  renderValidation();
+  if(++V.i>=V.jobs.length){stopValidation('Validation finished: '+vResults.length+' runs. Results and report are below the tunnel.');return;}
+  startJob();
+}
+// Richardson extrapolation on three grids (refinement ratio from cells across the body)
+function convergence(rows){
+  if(rows.length<3)return null; rows=[...rows].sort((a,b)=>a.cells-b.cells);
+  const [a,b,c]=rows, r=Math.sqrt(b.cells/a.cells*c.cells/b.cells), e1=b.cdC-a.cdC, e2=c.cdC-b.cdC;
+  const noise=Math.sqrt((b.seC||0)**2+(c.seC||0)**2)/Math.abs(c.cdC);
+  if(e1*e2<=0||Math.abs(e2)<1e-9)return {mono:false,change:Math.abs(e2/c.cdC),noise};
+  const pOrd=Math.min(4,Math.max(.5,Math.log(Math.abs(e1/e2))/Math.log(r))), ext=c.cdC+e2/(r**pOrd-1);
+  return {mono:true,p:pOrd,ext,gci:1.25*Math.abs(e2/c.cdC)/(r**pOrd-1),change:Math.abs(e2/c.cdC),noise};
+}
+function renderValidation(){
+  const fmtP=v=>(v>=0?'+':'')+(v*100).toFixed(0)+'%';
+  const rows=vResults.map(r=>`<tr><td>${BENCH[r.c].name}${r.a!==null?' '+r.a+'°':''}</td><td>${RNAME[r.res]}</td><td>${r.cells.toFixed(0)}</td><td>${Math.round(r.re).toLocaleString()}</td><td>${r.cd.toFixed(3)}</td><td>${(r.block*100).toFixed(1)}%</td><td>${r.cdC.toFixed(3)}</td><td>±${(r.seC||0).toFixed(3)}</td><td>${r.ref?r.ref.toFixed(3):'trend'}</td><td>${r.err!==null?fmtP(r.err):'–'}</td><td>${r.steady?'steady':'averaged'}</td></tr>`).join('');
+  $('vTable').innerHTML=vResults.length?`<table><thead><tr><th scope="col">Case</th><th scope="col">Grid</th><th scope="col">Cells across</th><th scope="col">Sim Re</th><th scope="col">Cd raw</th><th scope="col">Blockage</th><th scope="col">Cd corrected</th><th scope="col">± averaging</th><th scope="col">Reference</th><th scope="col">Error</th><th scope="col">Reading</th></tr></thead><tbody>${rows}</tbody></table>`
+    :'<div style="padding:14px;color:var(--dim);font-size:13px">Waiting for the first case to settle…</div>';
+  // summary per case
+  const lines=[];
+  for(const c of ['sphere200','sphere','plate','cube']){
+    const rs=vResults.filter(r=>r.c===c); if(!rs.length)continue; const best=rs.reduce((a,b)=>b.cells>a.cells?b:a), cv=convergence(rs);
+    let t=`<span><b>${BENCH[c].name}:</b> Cd ${best.cdC.toFixed(3)} ± ${(best.seC||0).toFixed(3)} against ${best.ref.toFixed(3)} (<b>${fmtP(best.err)}</b>) at ${RNAME[best.res]} resolution`;
+    if(cv)t+=cv.change<Math.max(0.02,2*cv.noise)?`; settled with grid (last refinement changed Cd by ${(cv.change*100).toFixed(0)}%, averaging noise ±${(2*cv.noise*100).toFixed(0)}%)`
+      :cv.mono?`; grid-converged estimate ${cv.ext.toFixed(3)} (${fmtP((cv.ext-best.ref)/best.ref)}), uncertainty ±${(cv.gci*100).toFixed(cv.gci<.01?1:0)}%`
+      :cv.change>3*Math.max(cv.noise,0.005)?`; changes between grids by ${(cv.change*100).toFixed(0)}% without a clear direction, well beyond its averaging noise (±${(2*cv.noise*100).toFixed(0)}%), so this case is not grid-converged: its wake settles differently on each grid`:`; varies between grids by ${(cv.change*100).toFixed(0)}%, within what its averaging noise allows`;
+    lines.push(t+'.</span>');
+  }
+  const ah=vResults.filter(r=>r.c==='ahmed');
+  if(ah.length){const fr=Math.max(...ah.map(r=>r.res)), A=Object.fromEntries(ah.filter(r=>r.res===fr).map(r=>[r.a,r.cdC]));
+    if(Object.keys(A).length===5){
+      const lowNear12=A[12.5]<=Math.min(A[0],A[25]), rise=A[30]>A[12.5], drop=A[35]<A[30];
+      const n=[lowNear12,rise,drop].filter(Boolean).length;
+      const a25=ah.find(r=>r.res===fr&&r.a===25&&r.ref);
+      if(a25)lines.push(`<span><b>Ahmed body 25° (${RNAME[fr]}):</b> Cd ${a25.cdC.toFixed(3)} ± ${(a25.seC||0).toFixed(3)} against the published ${a25.ref.toFixed(3)} (<b>${fmtP(a25.err)}</b>) at Re ${(a25.re/1e6).toFixed(2)} million.</span>`);
+      lines.push(`<span><b>Ahmed body trend (${RNAME[fr]}):</b> lowest near 12° ${lowNear12?'yes':'no'} · rises to 30° ${rise?'yes':'no'} · drops above 30° ${drop?'yes':'no'}. ${n===3?'Matches the published trend.':n===2?'Partly matches the published trend.':'Does not match the published trend.'} ${ah.find(r=>r.res===fr).re>=73000?'At this Reynolds number the published drop above 30° is expected.':'The sharp 30° drop is reported only above about Re 73,000; this run is at '+Math.round(ah.find(r=>r.res===fr).re).toLocaleString()+'.'}</span>`);
+    }}
+  const vwm=vResults.length&&vResults[0].wm;
+  if(lines.length)lines.push('<span style="color:var(--dim)">'+(vwm
+    ?'How to read this: this run uses the wall model at real Reynolds numbers (plate and cube at 1 million, Ahmed body at 4.29 million, as in the published test). The Re 200 sphere still checks the numerical method where the grid resolves the flow, so the wall model must leave it nearly unchanged. The Re 5,000 sphere has a laminar surface layer, which the turbulent law of the wall does not describe, so expect it to read low there. The Ahmed body at 25° is the vehicle test.'
+    :'How to read this: the Re 200 sphere tests the numerical method where the grid can resolve the flow. The other cases run where the air layer on the surface is thinner than one cell; their error mostly reflects that resolution limit, and smooth rounded shapes (sphere, Ahmed body) suffer more than sharp-edged ones (plate, cube), whose separation points are fixed by their edges.')+'</span>');
+  $('vSum').innerHTML=lines.join('');
+  $('vMethod').textContent='Method: D3Q19 Lattice Boltzmann ('+(S.f16?'16-bit':'32-bit')+' storage), regularized collision, Smagorinsky turbulence model (Cs 0.1), curved-wall (Bouzidi) bounce-back with wall positions taken from the mesh triangles, uniform inflow, pressure outlet with damping zone, free-slip side and top walls. Drag uses the frontal area of the body as simulated (its projected cells) and is averaged once the wake has formed (after one pass of air) and two consecutive half passes agree, over at least two passes and up to four until the ± is within 1.5%; ± is the standard error of that average, allowing for how long the wake remembers its swings (integrated autocorrelation time) and never less than the spread of 8 consecutive blocks. Blockage is corrected with a Maskell-type formula (factor 2.5). Free-standing shapes are centred with a slip floor; the Ahmed body sits above a moving floor without its legs. '+(vwm?'Surface layer: wall model (wall-function viscosity from the Spalding law of the wall in the cells next to the body, never below a quarter of the turbulence-model value), real Reynolds numbers: spheres at 200 and 5,000, plate and cube at 1 million, Ahmed body at 4.29 million on its length':'Surface layer treated as resolved: sphere, plate and cube target Re 5,000 on their size and the Ahmed body Re 30,000 on its length')+((vResults.length&&vResults[0].nwd)?'; near-wall damping of the turbulence model (Van Driest)':'')+'. The table lists the Reynolds number each run actually reached.';
+  drawValidationCharts();
+}
+// ---- charts (one measure each, no dual axes), dark on screen and light on paper
+const VT_DARK={bg:'#151b24',grid:'#222b38',axis:'#3a4658',text:'#8794a8'}, VT_LIGHT={bg:'#ffffff',grid:'#e6e9ee',axis:'#b8c0cc',text:'#5a6474'};
+const lightCol=c=>({'#e66767':'#e34948','#3987e5':'#2a78d6','#d95926':'#eb6834','#199e70':'#1baf7a','#1f4a85':'#b5d0f2','#2a6fc9':'#7aa9e6','#5a9be8':'#3b7bd0','#a9cdf7':'#1d4f99'})[c]||c;
+function vTicks(lo,hi,n=5){if(lo===hi){lo-=1;hi+=1;}const st0=(hi-lo)/n,mag=10**Math.floor(Math.log10(st0)),st=[1,2,2.5,5,10].map(m=>m*mag).find(x=>x>=st0);
+  const a=Math.floor(lo/st)*st,b=Math.ceil(hi/st)*st,t=[];for(let v=a;v<=b+st*1e-6;v+=st)t.push(+v.toFixed(10));return {t,lo:a,hi:b};}
+function seriesChart(ctx,w,h,T,series,{xl,yl,zero,pct,light}){
+  ctx.fillStyle=T.bg;ctx.fillRect(0,0,w,h);ctx.font='11px "IBM Plex Mono", ui-monospace, monospace';
+  const pts=series.flatMap(s=>s.pts); if(!pts.length){ctx.fillStyle=T.text;ctx.textAlign='center';ctx.fillText('no data yet',w/2,h/2);return null;}
+  const X=vTicks(Math.min(...pts.map(p=>p.x)),Math.max(...pts.map(p=>p.x))),ys=pts.map(p=>p.y);if(zero)ys.push(0);
+  const Y=vTicks(Math.min(...ys),Math.max(...ys)),l=48,r=10,t=8,b=30,sx=v=>l+(v-X.lo)/(X.hi-X.lo)*(w-l-r),sy=v=>h-b-(v-Y.lo)/(Y.hi-Y.lo)*(h-t-b);
+  ctx.lineWidth=1;ctx.strokeStyle=T.grid;ctx.fillStyle=T.text;
+  for(const v of Y.t){const y=Math.round(sy(v))+.5;ctx.beginPath();ctx.moveTo(l,y);ctx.lineTo(w-r,y);ctx.stroke();ctx.textAlign='right';ctx.textBaseline='middle';ctx.fillText(pct?Math.round(v*100)+'%':+v.toFixed(3)+'',l-6,y);}
+  for(const v of X.t){const x=Math.round(sx(v))+.5;ctx.beginPath();ctx.moveTo(x,t);ctx.lineTo(x,h-b);ctx.stroke();ctx.textAlign='center';ctx.textBaseline='top';ctx.fillText(+v.toFixed(2)+'',x,h-b+5);}
+  if(zero&&Y.lo<0&&Y.hi>0){ctx.strokeStyle=T.axis;const y=Math.round(sy(0))+.5;ctx.beginPath();ctx.moveTo(l,y);ctx.lineTo(w-r,y);ctx.stroke();}
+  ctx.textAlign='right';ctx.textBaseline='bottom';ctx.fillStyle=T.text;ctx.fillText(xl,w-r,h-b-3);
+  for(const sr of series){const col=light?lightCol(sr.color):sr.color, P=[...sr.pts].sort((a,b)=>a.x-b.x);
+    ctx.strokeStyle=col;ctx.lineWidth=2;ctx.lineJoin=ctx.lineCap='round';ctx.beginPath();P.forEach((p,i)=>i?ctx.lineTo(sx(p.x),sy(p.y)):ctx.moveTo(sx(p.x),sy(p.y)));ctx.stroke();
+    for(const p of P){ctx.beginPath();ctx.arc(sx(p.x),sy(p.y),6,0,7);ctx.fillStyle=T.bg;ctx.fill();ctx.beginPath();ctx.arc(sx(p.x),sy(p.y),4,0,7);
+      if(p.steady!==false){ctx.fillStyle=col;ctx.fill();}else{ctx.strokeStyle=col;ctx.lineWidth=1.5;ctx.stroke();ctx.lineWidth=2;}}}
+  return {sx,sy};
+}
+function errSeries(){return ['sphere200','sphere','plate','cube'].map(c=>({name:BENCH[c].name,color:VCOL[c],pts:vResults.filter(r=>r.c===c).map(r=>({x:r.cells,y:r.err,steady:r.steady,r}))})).filter(s=>s.pts.length);}
+function ahmSeries(){return [0,1,2,3].map(res=>({name:RNAME[res],color:RCOL[res],pts:vResults.filter(r=>r.c==='ahmed'&&r.res===res).map(r=>({x:r.a,y:r.cdC,steady:r.steady,r}))})).filter(s=>s.pts.length);}
+const vState={};
+function drawValidationCharts(){
+  for(const [id,ser,opt,keys] of [['vErr',errSeries(),{xl:'cells across body',zero:true,pct:true},'vErrKeys'],['vAhm',ahmSeries(),{xl:'slant angle °'},'vAhmKeys']]){
+    const cv=$(id),r=cv.getBoundingClientRect(),d=devicePixelRatio||1; if(!r.width)continue;
+    cv.width=Math.round(r.width*d);cv.height=Math.round(r.height*d);const x=cv.getContext('2d');x.setTransform(d,0,0,d,0,0);
+    vState[id]={g:seriesChart(x,r.width,r.height,VT_DARK,ser,opt),ser};
+    $(keys).innerHTML=ser.map(s=>`<span><i style="background:${s.color}"></i>${s.name}</span>`).join('')+(ser.length?'<span>○ = averaged, wake kept swinging</span>':'');
+  }
+}
+let vTip=null;
+for(const id of ['vErr','vAhm']){
+  const cv=$(id);
+  cv.addEventListener('pointermove',ev=>{const st=vState[id];if(!st||!st.g)return;const b=cv.getBoundingClientRect(),mx=ev.clientX-b.left,my=ev.clientY-b.top;let best=null,bd=16;
+    for(const s of st.ser)for(const p of s.pts){const dd=Math.hypot(st.g.sx(p.x)-mx,st.g.sy(p.y)-my);if(dd<bd){bd=dd;best=p.r;}}
+    if(!vTip){vTip=document.createElement('div');vTip.className='tip';} if(!best){vTip.remove();return;}
+    cv.parentElement.append(vTip);
+    vTip.textContent=`${BENCH[best.c].name}${best.a!==null?' '+best.a+'°':''} · ${RNAME[best.res]} · Cd ${best.cdC.toFixed(3)}`+(best.ref?` vs ${best.ref.toFixed(3)} (${(best.err>=0?'+':'')+(best.err*100).toFixed(0)}%)`:'');
+    vTip.style.left=Math.min(mx+12,b.width-vTip.offsetWidth-4)+'px';vTip.style.top=(my+40)+'px';});
+  cv.addEventListener('pointerleave',()=>vTip&&vTip.remove());
+}
+function backToModel(){
+  if(V)stopValidation(); S.bench=null; const sv=vSaved; vSaved=null; $('vBack').hidden=true; if(!sv)return;
+  if(S.res!==sv.res){S.res=sv.res;press('res','r',S.res);alloc();}
+  if(sv.file&&S.meshTris){S.preset='';S.name=sv.name;$('meshOpts').hidden=false;setModel(meshFromFile());}
+  else loadPreset(sv.preset||'car');
+  Object.assign(S,{len:sv.len,size:sv.size,h:sv.h,yaw:sv.yaw,pitch:sv.pitch,ground:sv.ground,speed:sv.speed,damp:1});
+  placeModel(); syncUI(); needVox=true; writeParams(); resetFlow(); $('vNote').textContent='Your model is back. Validation results stay below the tunnel.';
+}
+async function exportValidationPDF(){
+  const note=$('pdfNote'); if(!window.jspdf||!vResults.length){note.textContent='Run a validation first.';return;}
+  $('vPdf').disabled=true; note.textContent='Building validation report…';
+  try{
+    const {jsPDF}=window.jspdf,doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'}),ink=[24,30,40],dim=[110,120,135],acc=[20,120,190];
+    doc.setFillColor(13,17,23);doc.rect(0,0,210,16,'F');doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(13);doc.text('SLIPSTREAM 3D TUNNEL  -  VALIDATION REPORT',12,10.5);
+    doc.setFont('helvetica','normal');doc.setFontSize(9);doc.text(pdfTxt(new Date().toLocaleString()),198,10.5,{align:'right'});
+    let y=26; const para=(t,size=9,color=ink,bold=false)=>{doc.setFont('helvetica',bold?'bold':'normal');doc.setFontSize(size);doc.setTextColor(...color);const L=doc.splitTextToSize(pdfTxt(t),186);doc.text(L,12,y);y+=L.length*size*.42+2;};
+    para('Surface layer: '+((vResults.length&&vResults[0].wm)?'wall model at real Reynolds numbers':'resolved, scaled-down Reynolds numbers')+((vResults.length&&vResults[0].nwd)?', with near-wall damping':', no near-wall damping')+' · '+(S.f16?'16-bit':'32-bit')+' storage',9,dim);
+    para('Summary',10,acc,true);
+    for(const el of $('vSum').children)para(el.textContent,9);
+    y+=2; para('Method',10,acc,true); para($('vMethod').textContent,8.5,dim);
+    // charts (light colours for paper)
+    y+=2; const cw=520,ch=300;
+    [['vErr',errSeries(),{xl:'cells across body',zero:true,pct:true,light:true},'Error against reference (blockage-corrected)'],['vAhm',ahmSeries(),{xl:'slant angle °',light:true},'Ahmed body: drag by slant angle']].forEach(([id,ser,opt,title],i)=>{
+      const c=document.createElement('canvas');c.width=cw*2;c.height=ch*2;const x=c.getContext('2d');x.setTransform(2,0,0,2,0,0);seriesChart(x,cw,ch,VT_LIGHT,ser,opt);
+      const xx=12+i*95;doc.setFont('helvetica','bold');doc.setFontSize(8.5);doc.setTextColor(...ink);doc.text(title,xx,y);doc.addImage(c.toDataURL('image/png'),'PNG',xx,y+2,91,52.5);
+      doc.setFont('helvetica','normal');doc.setFontSize(7.5);let kx=xx;for(const s of ser){const col=lightCol(s.color);doc.setFillColor(parseInt(col.slice(1,3),16),parseInt(col.slice(3,5),16),parseInt(col.slice(5,7),16));doc.rect(kx,y+57.5,4,1,'F');doc.setTextColor(...dim);doc.text(s.name,kx+5.5,y+58.6);kx+=doc.getTextWidth(s.name)+11;}
+    });
+    y+=64;
+    // results table
+    const cols=[12,48,64,80,98,114,129,145,163,183],heads=['Case','Grid','Cells','Sim Re','Cd raw','Block.','Cd corr.','± avg.','Reference','Error'];
+    doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(...dim);heads.forEach((t,i)=>doc.text(t,cols[i],y));y+=1.5;doc.setDrawColor(210,215,222);doc.line(12,y,198,y);y+=4;
+    doc.setFont('helvetica','normal');doc.setTextColor(...ink);
+    for(const r of vResults){if(y>282){doc.addPage();y=20;}
+      [BENCH[r.c].name+(r.a!==null?' '+r.a+'°':''),RNAME[r.res],r.cells.toFixed(0),Math.round(r.re).toLocaleString(),r.cd.toFixed(3),(r.block*100).toFixed(1)+'%',r.cdC.toFixed(3),'±'+(r.seC||0).toFixed(3),r.ref?r.ref.toFixed(3):'trend',r.err!==null?((r.err>=0?'+':'')+(r.err*100).toFixed(0)+'%'):'-'].forEach((t,i)=>doc.text(pdfTxt(t),cols[i],y));y+=4.4;}
+    if(y>250){doc.addPage();y=20;}else y+=4;
+    para('References',10,acc,true);
+    for(const k of ['sphere200','sphere','plate','cube','ahmed'])para(BENCH[k].name+': '+((vResults.length&&vResults[0].wm&&BENCH[k].refTextWM)||BENCH[k].refText)+'.',8.5,dim);
+    para('Ahmed, S.R., Ramm, G., Faltin, G. (1984). Some salient features of the time-averaged ground vehicle wake. SAE Technical Paper 840300.',8.5,dim);
+    para((vResults.length&&vResults[0].wm)?'Limitations: the wall model assumes a turbulent surface layer and replaces, rather than resolves, the air layer on the surface; laminar regions and transition are not captured. Cells across the body are limited by GPU memory. Results support ranking design options, not certification.':'Limitations: simulated Reynolds numbers (5,000 to 30,000) are far below full-scale road vehicles (millions). Cells across the body are limited by GPU memory. Results support ranking design options, not certification.',8.5,dim);
+    const res=await downloads.save({filename:'slipstream-validation-'+((vResults.length&&vResults[0].wm)?'wallmodel':'resolved')+((vResults.length&&vResults[0].nwd)?'-damping':'')+'.pdf',data:doc.output('blob')});
+    note.textContent=res.status==='saved'?'Validation report saved.':'Validation report sent.';
+  }catch(e){const c=e&&e.code;note.textContent=c==='declined'?'Save cancelled.':'Could not create the validation report'+(e&&e.message?': '+e.message:'.');}
+  finally{$('vPdf').disabled=false;}
+}
+$('vRun').onclick=()=>V?stopValidation():startValidation();
+$('vBack').onclick=backToModel;
+$('vPdf').onclick=exportValidationPDF;
+addEventListener('resize',()=>{if(!$('vSec').hidden)drawValidationCharts();});
+
+
+// ================= modes: Design (students) and Engineering =================
+let MODE='design', stState='start', stFrac=0;
+function setStable(state,frac){
+  if(state!=='paused'){stState=state;stFrac=frac||0;}
+  if(S.paused&&state!=='paused')state='paused';
+  const t={start:['Starting','preparing the tunnel'],settle:['Flow settling…',Math.round((frac||0)*100)+'%'],almost:['Almost stable…','small changes left'],
+    stable:['Stable','ready to study'],paused:['Paused','flow frozen']}[state];
+  $('stTitle').textContent=t[0]; $('stSub').textContent=t[1]; $('stable').dataset.state=state==='paused'?stState:state;
+  $('stArc').style.strokeDashoffset=String(94.25*(1-(state==='stable'?1:Math.max(0,Math.min(1,state==='paused'?stFrac:frac||0)))));
+}
+function setMode(m){
+  if(m==='design'&&vSaved)backToModel();
+  MODE=m; document.body.classList.toggle('m-design',m==='design'); document.body.classList.toggle('m-eng',m==='eng'); press('modeSel','mode',m);
+  $('pdfNote').textContent=m==='design'?'4K images without buttons. Layered: a ZIP with a Photoshop file (background, air flow, model, legend on separate layers) plus each layer as a PNG.'
+    :'Views, baseline comparison and sections, with rough values and the error band in an appendix.';
+  showReal(); if(!$('vSec').hidden)drawValidationCharts();
+  try{history.replaceState(null,'','#'+(m==='design'?'design':'engineering'));}catch(e){}
+}
+$('modeSel').onclick=e=>{const b=e.target.closest('button');if(b)setMode(b.dataset.mode);};
+// Detail: Fast = Medium grid, Fine = High grid (falls back when the GPU lacks memory)
+const resOK=r=>{const b=document.querySelector(`#res [data-r="${r}"]`);return b&&!b.disabled;};
+function syncDetail(){press('detail','d',S.res>=2?'fine':'fast');const f=document.querySelector('#detail [data-d="fine"]');if(f)f.disabled=!resOK(2);}
+$('detail').onclick=e=>{const b=e.target.closest('button');if(!b||b.disabled)return;
+  const r=b.dataset.d==='fine'?(resOK(2)?2:1):(resOK(1)?1:0); if(r===S.res){syncDetail();return;}
+  if(V)stopValidation('Validation stopped because the resolution changed.'); S.res=r; press('res','r',r); syncDetail(); alloc();};
+
+// ================= image export (Design mode) =================
+let imgBg='dark';
+$('imgBg').onclick=e=>{const b=e.target.closest('button');if(!b)return;imgBg=b.dataset.b;press('imgBg','b',imgBg);};
+function setLook(light){
+  scene.background.set(light?0xf3f5f8:0x05070a);
+  if(tunnelParts.box)tunnelParts.box.material.color.set(light?0xb3bcc8:0x3a4658);
+  if(tunnelParts.floor)tunnelParts.floor.material.color.set(light?0xdde2e8:0x161b22);
+  if(tunnelParts.grid)tunnelParts.grid.visible=!light;
+}
+function lutCanvas(L){const c=document.createElement('canvas');c.width=256;c.height=1;const x=c.getContext('2d'),d=x.createImageData(256,1);
+  for(let i=0;i<256;i++){d.data[i*4]=L[i*3]*255;d.data[i*4+1]=L[i*3+1]*255;d.data[i*4+2]=L[i*3+2]*255;d.data[i*4+3]=255;}x.putImageData(d,0,0);return c;}
+function drawImgLegend(x,w,h,light){
+  const u=w/1920, rows=[];
+  if(S.surf)rows.push(['Surface pressure','low','high',RAIN]);
+  if(S.flow!=='off'||(S.slice!=='off'&&S.slMode==='vel'))rows.push(['Air speed','0 km/h',Math.round(S.speed*1.6)+' km/h',RAIN]);
+  if(S.slice!=='off'&&S.slMode==='pres')rows.push(['Slice pressure','low','high',RAIN]);
+  if(S.slice!=='off'&&S.slMode==='vort')rows.push(['Slice swirl','clockwise','counter-clockwise',SWIRL]);
+  const pad=18*u, bw=300*u, rowH=46*u, boxW=bw+pad*2, boxH=pad*2+rows.length*rowH+30*u, bx=28*u, by=h-boxH-28*u;
+  x.fillStyle=light?'rgba(255,255,255,.88)':'rgba(13,17,23,.82)'; x.strokeStyle=light?'rgba(30,40,55,.18)':'rgba(255,255,255,.12)'; x.lineWidth=1.5*u;
+  x.beginPath(); x.roundRect?x.roundRect(bx,by,boxW,boxH,10*u):x.rect(bx,by,boxW,boxH); x.fill(); x.stroke();
+  const ink=light?'#1a1f27':'#e4e9f0', dim=light?'#5a6474':'#8794a8';
+  x.textBaseline='alphabetic'; let yy=by+pad+14*u;
+  x.fillStyle=ink; x.font=`600 ${17*u}px "Barlow Condensed","Arial Narrow",sans-serif`; x.fillText((S.name||'Model').toUpperCase()+'  ·  '+S.speed+' KM/H'+(showingAvg?'  ·  TIME-AVERAGED':''),bx+pad,yy); yy+=16*u;
+  for(const [label,lo,hi,L] of rows){
+    x.fillStyle=dim; x.font=`500 ${13*u}px Barlow,system-ui,sans-serif`; x.fillText(label,bx+pad,yy+12*u);
+    x.imageSmoothingEnabled=true; x.drawImage(lutCanvas(L),bx+pad,yy+18*u,bw,9*u);
+    x.font=`${12*u}px Barlow,system-ui,sans-serif`; x.fillText(lo,bx+pad,yy+41*u); x.textAlign='right'; x.fillText(hi,bx+pad+bw,yy+41*u); x.textAlign='left';
+    yy+=rowH;
+  }
+}
+// render a clean frame at w x h; cam = named view, or null for the current view
+function snapshot(cam,w,h,light,legend){
+  const dashWas=lineMat.dashed; if(dashWas){lineMat.dashed=false;lineMat.needsUpdate=true;}
+  const C=viewCam(), pr=renderer.getPixelRatio(), keepPos=C.position.clone(), keepZoom=C.zoom, keepT=controls.target.clone(), keepCam=curCam;
+  setLook(light);
+  renderer.setPixelRatio(1); renderer.setSize(w,h,false); viewAspect=w/h; camera.aspect=viewAspect; camera.updateProjectionMatrix(); lineRes(w/Math.max(1,$('tunnel').clientWidth));
+  if(cam)setCam(cam); else if(useOrtho)fitOrtho();
+  controls.update(); renderer.render(scene,viewCam());
+  const out=document.createElement('canvas'); out.width=w; out.height=h; const x=out.getContext('2d'); x.drawImage(renderer.domElement,0,0);
+  if(legend)drawImgLegend(x,w,h,light);
+  setLook(false); renderer.setPixelRatio(pr); C.position.copy(keepPos); C.zoom=keepZoom; controls.target.copy(keepT); curCam=keepCam;
+  document.querySelectorAll('#cams button[data-c]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.c===keepCam));
+  if(dashWas){lineMat.dashed=true;lineMat.needsUpdate=true;}
+  resize(); controls.update(); renderer.render(scene,viewCam());
+  return out;
+}
+// ---- layered export: background, air flow, model, air flow passing in front of the model, legend
+function newCanvas(w,h){const c=document.createElement('canvas');c.width=w;c.height=h;return c;}
+function renderLayers(cam,w,h,light,legend){
+  const dashWas=lineMat.dashed; if(dashWas){lineMat.dashed=false;lineMat.needsUpdate=true;}
+  const C=viewCam(), pr=renderer.getPixelRatio(), keepPos=C.position.clone(), keepZoom=C.zoom, keepT=controls.target.clone(), keepCam=curCam, keepBg=scene.background;
+  setLook(light);
+  renderer.setPixelRatio(1); renderer.setSize(w,h,false); viewAspect=w/h; camera.aspect=viewAspect; camera.updateProjectionMatrix(); lineRes(w/Math.max(1,$('tunnel').clientWidth));
+  if(cam)setCam(cam); else if(useOrtho)fitOrtho();
+  controls.update(); const V3=viewCam();
+  const flow=[lines,parts,sliceMesh].filter(Boolean), all=[...flow,tunnelGroup,modelRoot], was=new Map(all.map(o=>[o,o.visible]));
+  const only=list=>{for(const o of all)o.visible=list.includes(o)&&was.get(o);};
+  const grab=()=>{const c=newCanvas(w,h);c.getContext('2d').drawImage(renderer.domElement,0,0);return c;};
+  const modelMats=[]; modelRoot.traverse(o=>{if(o.isMesh)modelMats.push(o.material);});
+  let L={};
+  try{
+    only([tunnelGroup]); renderer.render(scene,V3); L.background=grab();
+    scene.background=null; renderer.setClearColor(0x000000,0);
+    only([modelRoot]); renderer.render(scene,V3); L.model=grab();
+    only(flow); renderer.render(scene,V3); L.flow=grab();
+    // flow as seen with the model in place (model writes depth only), then kept only where it crosses the model
+    only([...flow,modelRoot]); modelMats.forEach(m=>m.colorWrite=false); renderer.render(scene,V3); modelMats.forEach(m=>m.colorWrite=true);
+    const front=grab(), fx=front.getContext('2d'); fx.globalCompositeOperation='destination-in'; fx.drawImage(L.model,0,0); L.front=front;
+    if(legend){L.legend=newCanvas(w,h);drawImgLegend(L.legend.getContext('2d'),w,h,light);}
+  }finally{
+    modelMats.forEach(m=>m.colorWrite=true); for(const [o,v] of was)o.visible=v;
+    scene.background=keepBg; setLook(false); renderer.setPixelRatio(pr); C.position.copy(keepPos); C.zoom=keepZoom; controls.target.copy(keepT); curCam=keepCam;
+    document.querySelectorAll('#cams button[data-c]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.c===keepCam));
+    if(dashWas){lineMat.dashed=true;lineMat.needsUpdate=true;}
+    resize(); controls.update(); renderer.render(scene,viewCam());
+  }
+  const comp=newCanvas(w,h), cx=comp.getContext('2d');
+  for(const k of ['background','flow','model','front','legend'])if(L[k])cx.drawImage(L[k],0,0);
+  L.composite=comp; return L;
+}
+// Photoshop layer order is bottom to top; the two air-flow layers share a link so they move together
+function layersToPSD(L){
+  const kids=[{name:'Background (tunnel)',canvas:L.background},
+    {name:'Air flow',canvas:L.flow,linkGroup:1},
+    {name:'Model',canvas:L.model},
+    {name:'Air flow in front of model',canvas:L.front,linkGroup:1}];
+  if(L.legend)kids.push({name:'Legend',canvas:L.legend});
+  return agPsd.writePsd({width:L.composite.width,height:L.composite.height,canvas:L.composite,children:kids},{generateThumbnail:true,noBackground:true});
+}
+const LAYER_FILES=[['background','1-background'],['flow','2-air-flow'],['model','3-model'],['front','4-air-flow-in-front-of-model'],['legend','5-legend']];
+const fileBase=()=>'slipstream-'+((S.name||'model').replace(/\.[a-z0-9]+$/i,'').replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'').toLowerCase()||'model');
+const toPNG=c=>new Promise(r=>c.toBlob(r,'image/png'));
+const IMG_W=3840, IMG_H=2160;
+async function saveImages(set){
+  const note=$('pdfNote'), btns=[$('saveImg'),$('saveSet')], layered=$('imgLayers').checked;
+  if(!downloads)return;
+  if((set||layered)&&!window.JSZip){note.textContent='The ZIP library did not load. Reload the page and try again.';return;}
+  if(layered&&!window.agPsd){note.textContent='The Photoshop file library did not load. Reload the page, or untick Layered to save plain images.';return;}
+  btns.forEach(b=>b.disabled=true); note.textContent=set?'Rendering four views…':'Rendering image…';
+  const light=imgBg==='light', legend=$('imgLeg').checked, stable=$('stable').dataset.state==='stable', proj=useOrtho?'-ortho':'', tick=()=>new Promise(r=>setTimeout(r,30));
+  try{
+    let res, base=fileBase();
+    if(!set&&!layered){
+      res=await downloads.save({filename:`${base}-view${proj}.png`,data:await toPNG(snapshot(null,IMG_W,IMG_H,light,legend))});
+    }else{
+      const zip=new JSZip(), views=set?['3d','side','top','front']:[null];
+      for(const v of views){
+        await tick(); const tag=v||'view', name=`${base}-${tag}${proj}`;
+        if(layered){
+          const L=renderLayers(v,IMG_W,IMG_H,light,legend);
+          note.textContent=`Writing Photoshop file${set?' for '+tag+' view':''}…`; await tick();
+          zip.file(`${name}.psd`,layersToPSD(L),{compression:'DEFLATE'});
+          zip.file(`${name}.png`,await toPNG(L.composite));
+          if(!set)for(const [k,f] of LAYER_FILES)if(L[k])zip.file(`layers/${f}.png`,await toPNG(L[k]));
+        }else zip.file(`${name}.png`,await toPNG(snapshot(v,IMG_W,IMG_H,light,legend)));
+      }
+      note.textContent='Packing ZIP…'; await tick();
+      res=await downloads.save({filename:`${base}-${set?'views':'view'+proj}${layered?'-layered':''}.zip`,data:await zip.generateAsync({type:'blob'})});
+    }
+    note.textContent=(res.status==='saved'?'Saved.':'Sent.')+(stable?'':' The flow was not stable yet, so the picture may still change.');
+  }catch(e){const c=e&&e.code;note.textContent=c==='declined'?'Save cancelled.':c==='rate_limited'?'A save prompt is already open. Finish it, then try again.':'Could not save'+(e&&e.message?': '+e.message:'.');}
+  finally{btns.forEach(b=>b.disabled=false);}
+}
+$('saveImg').onclick=()=>saveImages(false);
+$('saveSet').onclick=()=>saveImages(true);
+
+// ---------- mesh files ----------
+function parseSTL(buf){
+  const dv=new DataView(buf), n=dv.byteLength>=84?dv.getUint32(80,true):0;
+  if(n>0&&84+n*50===dv.byteLength){const o=new Float32Array(n*9);for(let i=0;i<n;i++){const b=84+i*50+12;for(let k=0;k<9;k++)o[i*9+k]=dv.getFloat32(b+k*4,true);}return o;}
+  const txt=new TextDecoder().decode(buf),v=[],re=/vertex\s+([-\d.eE+]+)\s+([-\d.eE+]+)\s+([-\d.eE+]+)/g;let m;
+  while((m=re.exec(txt)))v.push(+m[1],+m[2],+m[3]); return new Float32Array(v);
+}
+function parseOBJ(txt){
+  const vs=[],o=[];
+  for(const line of txt.split('\n')){
+    if(line.startsWith('v ')){const p=line.trim().split(/\s+/);vs.push([+p[1],+p[2],+p[3]]);}
+    else if(line.startsWith('f ')){
+      const ids=line.trim().split(/\s+/).slice(1).map(t=>{const k=parseInt(t);return k<0?vs.length+k:k-1;});
+      for(let i=1;i+1<ids.length;i++)for(const j of [ids[0],ids[i],ids[i+1]]){const p=vs[j]||[0,0,0];o.push(p[0],p[1],p[2]);}
+    }
+  }
+  return new Float32Array(o);
+}
+function meshFromFile(){
+  const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(S.meshTris.slice(),3));
+  if(S.up===2)g.rotateX(-Math.PI/2); else if(S.up===0)g.rotateZ(Math.PI/2);
+  g.computeBoundingBox(); const b=g.boundingBox;
+  if(b.max.z-b.min.z>b.max.x-b.min.x)g.rotateY(Math.PI/2);
+  if(S.flip)g.rotateY(Math.PI);
+  return [new THREE.Mesh(g,surfMat())];
+}
+
+// ---------- UI ----------
+function press(group,attr,val){document.querySelectorAll(`#${group} button`).forEach(b=>b.setAttribute('aria-pressed',b.dataset[attr]==val));}
+const PRE={car:{len:4.6,size:.35,h:0,ground:true},helmet:{len:.42,size:.24,h:.3,ground:false},scooter:{len:1.2,size:.15,h:0,ground:true},drone:{len:.5,size:.28,h:.35,ground:false}};
+function loadPreset(name){
+  if(V)stopValidation('Validation stopped because the model changed.'); S.bench=null;
+  const p=PRE[name]; S.preset=name; S.name=name[0].toUpperCase()+name.slice(1)+' (built-in)'; Object.assign(S,{damp:1,len:p.len,size:p.size,h:p.h,ground:p.ground,yaw:0,pitch:0});
+  $('meshOpts').hidden=true; setModel(presetMeshes(name)); syncUI(); press('presets','p',name);
+  if(device&&bufs.f0){writeParams();resetFlow();}
+}
+function syncUI(){
+  $('spd').value=S.speed;$('size').value=Math.round(S.size*100);$('h').value=Math.round(S.h*100);$('yaw').value=S.yaw;$('pitch').value=S.pitch;
+  $('len').value=S.len;$('ground').checked=S.ground;
+  $('spdOut').textContent=S.speed+' km/h';$('sizeOut').textContent=Math.round(S.size*100)+'% of tunnel';$('hOut').textContent=Math.round(S.h*100)+'%';
+  $('yawOut').textContent=S.yaw+'°';$('pitchOut').textContent=S.pitch+'°';
+  $('slOut').textContent=S.slice==='off'?'':Math.round(S.slPos*100)+'%';
+}
+$('presets').onclick=e=>{const b=e.target.closest('button');if(b)loadPreset(b.dataset.p);};
+// sliders move the visible model at once; the simulation's solid shape is rebuilt when the slider pauses or is released
+let voxTimer=0;
+const moved=()=>{syncUI();if(W)placeModel();clearTimeout(voxTimer);voxTimer=setTimeout(()=>{needVox=true;},120);};
+for(const id of ['size','h','yaw','pitch'])$(id).addEventListener('change',()=>{clearTimeout(voxTimer);needVox=true;});
+$('spd').oninput=e=>{S.speed=+e.target.value;syncUI();if(device)updateTau();showReal();};
+$('size').oninput=e=>{S.size=e.target.value/100;moved();};
+$('h').oninput=e=>{S.h=e.target.value/100;moved();};
+$('yaw').oninput=e=>{S.yaw=+e.target.value;moved();};
+$('pitch').oninput=e=>{S.pitch=+e.target.value;moved();};
+$('len').oninput=e=>{S.len=Math.max(.05,+e.target.value||1);if(device&&S.wm)updateTau();showReal();};
+$('ground').onchange=e=>{S.ground=e.target.checked;writeParams();};
+$('prec').onclick=e=>{const b=e.target.closest('button');if(!b||b.disabled)return;const want=b.dataset.p==='16';if(want===S.f16||(want&&!hasF16))return;
+  if(V)stopValidation('Validation stopped because the precision changed.');S.f16=want;checkResLimits();press('res','r',S.res);alloc();};
+// speed test: no readbacks or flow redraws, so the number is the solver alone
+async function speedTest(){
+  if(!device||!bufs.f0)return; const btn=$('bench'), out=$('benchOut'), wasPaused=S.paused;
+  btn.disabled=true; S.paused=false; benchmarking=true; out.textContent='Warming up…';
+  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+  try{
+    await sleep(1500); out.textContent='Measuring…';
+    const s0=doneSteps, t0=performance.now(); await sleep(5000);
+    const steps=doneSteps-s0, dt=(performance.now()-t0)/1000, mlups=steps*N/dt/1e6, gbs=mlups*1e6*(19*2*ddfBytes()+8)/1e9;
+    out.textContent=`${mlups<10?mlups.toFixed(2):Math.round(mlups).toLocaleString()} M cells/s · ${Math.round(steps/dt)} steps/s · about ${Math.round(gbs)} GB/s memory traffic (${RNAME[S.res]}, ${S.f16?'16':'32'}-bit, surface: ${surfText()})`;
+  }finally{benchmarking=false; S.paused=wasPaused; btn.disabled=false;}
+}
+$('bench').onclick=speedTest;
+function avgNote(){
+  const n=$('viewNote');
+  if(S.view!=='avg'){n.textContent='Live shows the flow as it is right now.';return;}
+  if(!avgSamples){n.textContent='Averaging starts once the air has filled the tunnel…';return;}
+  const ft=avgSamples*4/(W/U0);
+  n.textContent=ft<1?`Averaging… ${Math.round(ft*100)}% of one pass of air through the tunnel. The picture keeps getting calmer.`
+    :`Averaged over ${ft.toFixed(1)} passes of air through the tunnel. Good for still images.`;
+}
+$('view').onclick=e=>{const b=e.target.closest('button');if(!b)return;S.view=b.dataset.v;press('view','v',S.view);avgNote();lastRead=0;};
+$('wallMode').onclick=e=>{const b=e.target.closest('button');if(!b)return;const w=b.dataset.w==='wm';if(w===S.wm)return;S.wm=w;press('wallMode','w',b.dataset.w);
+  if(device){S.damp=1;updateTau();resetFlow();clearHist();} showReal();};
+$('nwd').onchange=e=>{S.nwd=e.target.checked;if(device){writeParams();clearHist();}};
+$('avgMode').onclick=e=>{const b=e.target.closest('button');if(!b)return;S.precise=b.dataset.a==='precise';press('avgMode','a',b.dataset.a);judge();};
+$('anim').onchange=e=>{S.animate=e.target.checked;};
+$('lw').oninput=e=>{S.lineW=+e.target.value;$('lwOut').textContent=S.lineW+' px';lineRes(1);};
+$('surf').onchange=e=>{S.surf=e.target.checked;paintSurface();};
+$('res').onclick=e=>{const b=e.target.closest('button');if(!b||b.disabled)return;if(V)stopValidation('Validation stopped because the resolution changed.');S.res=+b.dataset.r;press('res','r',S.res);syncDetail();alloc();};
+$('flow').onclick=e=>{const b=e.target.closest('button');if(!b)return;S.flow=b.dataset.f;press('flow','f',S.flow);lines.visible=S.flow==='lines';parts.visible=S.flow==='parts';if(S.flow==='parts')seedParticles();};
+$('slice').onclick=e=>{const b=e.target.closest('button');if(!b)return;S.slice=b.dataset.s;press('slice','s',S.slice);syncUI();
+  buildSlice();};
+$('slPos').oninput=e=>{S.slPos=e.target.value/100;syncUI();placeSlice();paintSlice();};
+$('slMode').onclick=e=>{const b=e.target.closest('button');if(!b)return;S.slMode=b.dataset.m;press('slMode','m',S.slMode);paintSlice();};
+$('cams').onclick=e=>{const b=e.target.closest('button');if(!b)return;if(b.id==='proj'){setOrtho(!useOrtho);return;}setCam(b.dataset.c);};
+$('pause').onclick=()=>{S.paused=!S.paused;$('pause').textContent=S.paused?'Run':'Pause';$('pause').setAttribute('aria-pressed',S.paused);setStable(S.paused?'paused':stState,stFrac);};
+$('reset').onclick=()=>{if(device)resetFlow();};
+$('upAxis').onchange=e=>{S.up=+e.target.value;setModel(meshFromFile());};
+$('flip').onclick=()=>{S.flip=!S.flip;setModel(meshFromFile());};
+$('file').onchange=async e=>{
+  const file=e.target.files[0]; if(!file)return; const ext=file.name.split('.').pop().toLowerCase();
+  if(V)stopValidation('Validation stopped because the model changed.'); S.bench=null; $('vBack').hidden=true;
+  try{S.meshTris=ext==='stl'?parseSTL(await file.arrayBuffer()):parseOBJ(await file.text()); if(!S.meshTris.length)throw 0;}
+  catch(err){$('hud').textContent='Could not read that file. Use an STL (binary or text) or an OBJ with faces.';return;}
+  S.up=ext==='stl'?2:1; $('upAxis').value=S.up; S.flip=false; S.preset=''; S.name=file.name;
+  Object.assign(S,{damp:1,size:.33,h:0,yaw:0,pitch:0,ground:true}); $('meshOpts').hidden=false; press('presets','p','');
+  setModel(meshFromFile()); syncUI(); if(device){writeParams();resetFlow();} e.target.value='';
+};
+
+function resize(){const r=$('tunnel').getBoundingClientRect();renderer.setSize(r.width,r.height,false);viewAspect=r.width/Math.max(1,r.height);camera.aspect=viewAspect;camera.updateProjectionMatrix();if(useOrtho)fitOrtho();lineRes(1);}
+// line thickness in screen pixels; scale > 1 when rendering a larger image than the screen
+function lineRes(scale){
+  const v=renderer.getDrawingBufferSize(new THREE.Vector2()), pr=renderer.getPixelRatio();
+  lineMat.resolution.copy(v); lineMat.linewidth=S.lineW*pr*scale; parts.material.size=2.2*(0.5+0.5*S.lineW)*scale;
+  // thick lines are drawn solid: semi-transparent segments overlap at their joints and look beaded
+  const solidLines=S.lineW>1; if(lineMat.transparent===solidLines){lineMat.transparent=!solidLines;lineMat.depthWrite=solidLines;lineMat.opacity=solidLines?1:.55;lineMat.needsUpdate=true;}
+}
+addEventListener('resize',resize);
+// legend
+for(const id of ['leg','leg2'])(()=>{const c=$(id),x=c.getContext('2d'),d=x.createImageData(256,1);for(let i=0;i<256;i++){d.data[i*4]=RAIN[i*3]*255;d.data[i*4+1]=RAIN[i*3+1]*255;d.data[i*4+2]=RAIN[i*3+2]*255;d.data[i*4+3]=255;}x.putImageData(d,0,0);})();
+
+// boot
+(async()=>{
+  setMode(/engineering|eng/i.test(location.hash)?'eng':'design'); press('view','v','live'); press('avgMode','a','std'); press('wallMode','w','res'); press('imgBg','b','dark'); setStable('start',0);
+  resize(); press('flow','f','lines'); press('slice','s','off'); press('slMode','m','vel'); parts.visible=false;
+  [W,H,D]=RES[S.res]; loadPreset('car'); setCam('3d');
+  let ok=false; try{ok=await initGPU();}catch(err){fail('Could not start the GPU simulation: '+err.message);}
+  if(ok){press('res','r',S.res); alloc(); updateTau(); }
+  syncDetail();
+  requestAnimationFrame(frame);
+})();
+</script>
+
+</body>
+</html>

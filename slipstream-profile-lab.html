@@ -1,0 +1,873 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Slipstream Profile Lab</title>
+<style>html{color-scheme:dark}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<!-- Slipstream. Copyright (c) 2026 Claas Kuhnen <info@ckbrd.de>. MIT License. Results are for design exploration, not certified engineering numbers. Third-party libraries keep their own licenses (see licenses/). -->
+
+<link rel="stylesheet" href="lib/fonts.css">
+<style>
+/* Layout: instrument console — 2D section tunnel + readouts + polar charts left, control rack right (stacks on phones) */
+:root{
+  --bg:#0d1117; --panel:#151b24; --line:#263142; --grid:#222b38; --fg:#e4e9f0; --dim:#8794a8; --accent:#4fc3ff; --warn:#ffb648;
+  --s1:#3987e5; --s2:#d95926;
+  --f-display:"Barlow Condensed","Arial Narrow",sans-serif;
+  --f-body:"Barlow",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,monospace;
+  color-scheme:dark;
+}
+html,body{height:100%}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:14px;box-sizing:border-box;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header{display:flex;align-items:baseline;gap:14px;padding-block:14px 10px;flex-wrap:wrap}
+h1{font-family:var(--f-display);font-weight:600;font-size:26px;letter-spacing:.04em;text-transform:uppercase;margin:0}
+h2{font-family:var(--f-display);font-weight:600;font-size:17px;letter-spacing:.08em;text-transform:uppercase;margin:0;color:var(--fg)}
+header p{margin:0;color:var(--dim)}
+header a{color:var(--accent)}
+.app{display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:16px;padding-bottom:20px}
+@media (max-width:900px){.app{grid-template-columns:minmax(0,1fr)}}
+.stage{min-width:0;display:flex;flex-direction:column;gap:10px}
+.tunnel{position:relative;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:#000;touch-action:none}
+canvas#view{display:block;width:100%;cursor:grab}
+canvas#view.drag{cursor:grabbing}
+canvas#view:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.hud{position:absolute;left:10px;top:8px;font-family:var(--f-mono);font-size:12px;color:#fff;text-shadow:0 1px 2px #000;pointer-events:none}
+.hint{position:absolute;right:10px;bottom:8px;font-size:12px;color:#cfd8e3;text-shadow:0 1px 2px #000;pointer-events:none}
+.msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;background:rgba(5,7,10,.92);line-height:1.5}
+.msg div{max-width:440px}
+.legend{display:grid;grid-template-columns:auto auto minmax(80px,1fr) auto;gap:6px 10px;align-items:center;font-family:var(--f-mono);font-size:12px;color:var(--dim)}
+.legend canvas{width:100%;height:12px;border-radius:2px}
+.legend .k{font-family:var(--f-display);font-size:13px;letter-spacing:.08em;text-transform:uppercase}
+.legend .hi{text-align:right}
+.rowlab{font-family:var(--f-display);font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin:2px 0 -4px}
+.readout{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+.readout.four{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:640px){.readout,.readout.four{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:8px 12px;min-width:0}
+.stat b{display:block;font-family:var(--f-mono);font-weight:500;font-size:19px;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stat span{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+.stat small{display:block;font-family:var(--f-mono);font-size:11px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip{display:inline-block;font-family:var(--f-mono);font-size:13px;padding:2px 8px;border-radius:10px;margin-top:3px;background:#2a3140;color:var(--dim)}
+.chip.go{background:#123c2a;color:#5fe0a0}.chip.wait{background:#3b2f12;color:var(--warn)}
+.meta{font-family:var(--f-mono);font-size:12px;color:var(--dim);display:flex;gap:18px;flex-wrap:wrap}
+.meta b{color:var(--fg);font-weight:500}
+.note{font-size:12px;color:var(--dim);line-height:1.45;margin:0}
+.sweep{display:flex;flex-direction:column;gap:10px;margin-top:8px}
+.sweephead{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.keys{display:flex;gap:14px;font-family:var(--f-mono);font-size:12px;color:var(--dim);flex-wrap:wrap}
+.keys i{display:inline-block;width:14px;height:2px;vertical-align:middle;margin-right:6px;border-radius:1px}
+.charts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+@media (max-width:760px){.charts{grid-template-columns:minmax(0,1fr)}}
+.chart{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px 10px 6px;position:relative;min-width:0}
+.chart h3{margin:0 0 4px;font-family:var(--f-display);font-weight:500;font-size:14px;letter-spacing:.06em;text-transform:uppercase;color:var(--fg)}
+.chart canvas{display:block;width:100%;height:200px}
+.tip{position:absolute;pointer-events:none;background:#0b0f15;border:1px solid var(--line);border-radius:4px;padding:6px 8px;font-family:var(--f-mono);font-size:12px;color:var(--fg);white-space:nowrap;z-index:5}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:6px}
+table{border-collapse:collapse;width:100%;font-family:var(--f-mono);font-size:12.5px;font-variant-numeric:tabular-nums}
+th,td{padding:6px 10px;text-align:right;border-bottom:1px solid var(--grid);white-space:nowrap}
+th{font-family:var(--f-display);font-weight:500;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);background:var(--panel)}
+td:first-child,th:first-child{text-align:left}
+tr.best td{color:#5fe0a0}
+.empty{padding:14px;color:var(--dim);font-size:13px}
+aside{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.grp{display:flex;flex-direction:column;gap:7px}
+.lab{font-family:var(--f-display);font-size:14px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);display:flex;justify-content:space-between;gap:8px}
+.lab output{font-family:var(--f-mono);color:var(--fg);letter-spacing:0;text-transform:none}
+.seg{display:flex;flex-wrap:wrap;gap:4px}
+button,.file{font:inherit;font-size:13px;background:#1d2531;color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:6px 10px;cursor:pointer;flex:1 1 auto;text-align:center}
+button:hover,.file:hover{border-color:var(--accent)}
+button[aria-pressed="true"]{background:var(--accent);color:#04121c;border-color:var(--accent)}
+button.primary{background:var(--accent);color:#04121c;border-color:var(--accent);font-weight:500}
+button:disabled{opacity:.4;cursor:not-allowed}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.file input{display:none}
+.row{display:flex;gap:8px;align-items:center}
+.row .note{flex:none}
+select,input[type=number],input[type=text]{font:inherit;background:#1d2531;color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:5px;min-width:0;flex:1}
+.check{display:flex;gap:8px;align-items:center;cursor:pointer}
+.three{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.three label{display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--dim);letter-spacing:.06em;text-transform:uppercase}
+</style>
+
+<header>
+  <h1>Slipstream Profile Lab</h1>
+  <p>High-detail 2D section studies · wings, spoilers, tubes, blade sections · <a href="slipstream-3d-tunnel.html" target="_blank" rel="noopener">open 3D tunnel</a></p>
+</header>
+
+<div class="app">
+  <div class="stage">
+    <div class="tunnel" id="tunnel">
+      <canvas id="view" aria-label="Wind tunnel view"></canvas>
+      <div class="hud" id="hud">Starting…</div>
+      <div class="hint">Drag to move · arrow keys to nudge</div>
+      <div class="msg" id="msg" hidden><div id="msgText"></div></div>
+    </div>
+    <div class="legend">
+      <span class="k" id="legName">Air speed</span><span id="legLo">0 km/h</span><canvas id="leg" width="256" height="1"></canvas><span class="hi" id="legHi">–</span>
+    </div>
+
+    <div class="rowlab">Coefficients</div>
+    <div class="readout">
+      <div class="stat"><span>Lift Cl</span><b id="cl">–</b><small id="clVar">&nbsp;</small></div>
+      <div class="stat"><span>Drag Cd</span><b id="cd">–</b><small id="cdVar">&nbsp;</small></div>
+      <div class="stat"><span>Lift / drag</span><b id="ld">–</b><small>efficiency</small></div>
+      <div class="stat"><span>Moment Cm</span><b id="cm">–</b><small>+ = nose up</small></div>
+      <div class="stat"><span>Readings</span><b><span class="chip wait" id="status">settling</span></b><small id="statusNote">&nbsp;</small></div>
+    </div>
+    <div class="rowlab">Real world · per <span id="spanLab">1 m</span> of span</div>
+    <div class="readout four">
+      <div class="stat"><span id="liftNLab">Lift</span><b id="liftN">–</b><small id="liftKg">&nbsp;</small></div>
+      <div class="stat"><span>Drag</span><b id="dragN">–</b><small id="dragKg">&nbsp;</small></div>
+      <div class="stat"><span>Power to push air</span><b id="dragW">–</b><small>at this speed</small></div>
+      <div class="stat"><span>Reference length</span><b id="refL">–</b><small id="refNote">chord</small></div>
+    </div>
+    <div class="meta"><span>Real Reynolds <b id="reReal">–</b></span><span>Simulated Reynolds <b id="reSim">–</b></span><span>Blockage <b id="block">–</b></span><span>GPU <b id="fps">–</b></span></div>
+
+    <section class="sweep" aria-labelledby="sweepTitle">
+      <div class="sweephead">
+        <h2 id="sweepTitle">Angle sweep</h2>
+        <div class="keys" id="keys"></div>
+      </div>
+      <div class="charts">
+        <div class="chart"><h3>Lift Cl by angle</h3><canvas id="chCl"></canvas></div>
+        <div class="chart"><h3>Drag Cd by angle</h3><canvas id="chCd"></canvas></div>
+        <div class="chart"><h3>Lift vs drag (polar)</h3><canvas id="chPolar"></canvas></div>
+      </div>
+      <div class="tablewrap"><div id="table"><div class="empty">Run a sweep to fill this table. Each angle runs until its readings are steady, then the next angle starts.</div></div></div>
+      <p class="note">Simulated Reynolds numbers are far below real ones (about 13,000–26,000 here against hundreds of thousands in reality). Expect earlier stall, lower peak lift and higher drag than wind-tunnel data for the same airfoil; differences between profiles are what this lab is for.</p>
+    </section>
+  </div>
+
+  <aside>
+    <div class="grp">
+      <span class="lab">Profile</span>
+      <select id="preset" aria-label="Profile preset">
+        <option value="naca">NACA 4-digit airfoil</option>
+        <option value="wing">Race wing element + Gurney flap</option>
+        <option value="blade">Propeller blade section</option>
+        <option value="plate">Flat plate</option>
+        <option value="round">Round tube</option>
+        <option value="aero">Aero tube (teardrop 3:1)</option>
+        <option value="kamm">Kammtail tube (truncated)</option>
+      </select>
+      <div class="row" id="nacaRow"><span class="note">NACA code</span><input type="text" id="naca" value="2412" maxlength="4" inputmode="numeric" aria-label="NACA four-digit code"></div>
+      <label class="check"><input type="checkbox" id="invert"> Flip upside down (downforce)</label>
+      <label class="file">Load STL / OBJ / airfoil .dat…<input type="file" id="file" accept=".stl,.obj,.dat,.txt,.csv"></label>
+      <div id="meshOpts" class="grp" hidden>
+        <div class="row"><select id="upAxis" aria-label="Up axis"><option value="1">Y up</option><option value="2">Z up</option><option value="0">X up</option></select><button id="flip">Flip facing</button></div>
+        <div class="seg" id="cutPlane"><button data-c="side">Side cut</button><button data-c="top">Top cut</button></div>
+        <span class="lab">Cut position <output id="cutOut"></output></span>
+        <input type="range" id="cutPos" min="1" max="99" value="50" aria-label="Cut position">
+        <p class="note" id="cutNote">The section is cut from the mesh itself, at full mesh detail.</p>
+      </div>
+      <div class="row"><span class="note">Chord (m)</span><input type="number" id="chord" step="0.01" min="0.005" value="0.3"><span class="note">Span (m)</span><input type="number" id="span" step="0.05" min="0.01" value="1"></div>
+    </div>
+
+    <div class="grp"><span class="lab">Air speed <output id="spdOut"></output></span><input type="range" id="spd" min="5" max="250" value="100"></div>
+    <div class="grp"><span class="lab">Angle of attack <output id="angOut"></output></span><input type="range" id="ang" min="-20" max="25" step="0.5" value="4"></div>
+
+    <div class="grp">
+      <span class="lab">Placement</span>
+      <span class="lab">Chord scale <output id="sizeOut"></output></span><input type="range" id="size" min="10" max="30" value="18" aria-label="Scale in tunnel">
+      <label class="check"><input type="checkbox" id="ground"> Ground effect (moving road floor)</label>
+      <div id="rideRow" hidden><span class="lab">Ride height <output id="rideOut"></output></span><input type="range" id="ride" min="5" max="150" value="40" aria-label="Ride height"></div>
+    </div>
+
+    <div class="grp">
+      <span class="lab">Reference length</span>
+      <div class="seg" id="refSel"><button data-r="chord">Chord</button><button data-r="frontal">Frontal height</button></div>
+    </div>
+
+    <div class="grp">
+      <span class="lab">Resolution</span>
+      <div class="seg" id="res"><button data-r="0">Low</button><button data-r="1">Medium</button><button data-r="2">High</button></div>
+    </div>
+
+    <div class="grp">
+      <span class="lab">Show</span>
+      <div class="seg" id="mode"><button data-m="vel">Speed</button><button data-m="pres">Pressure</button><button data-m="vort">Swirl</button></div>
+      <label class="check"><input type="checkbox" id="lines" checked> Streaks</label>
+      <div class="seg"><button id="pause">Pause</button><button id="reset">Reset flow</button></div>
+    </div>
+
+    <div class="grp">
+      <span class="lab">Angle sweep</span>
+      <div class="three">
+        <label>From °<input type="number" id="swFrom" value="-6" step="1"></label>
+        <label>To °<input type="number" id="swTo" value="16" step="1"></label>
+        <label>Step °<input type="number" id="swStep" value="2" min="0.5" step="0.5"></label>
+      </div>
+      <button class="primary" id="runSweep">Run sweep</button>
+      <div class="seg"><button id="pin" disabled>Keep as reference</button><button id="clearRef" disabled>Clear reference</button></div>
+      <p class="note" id="sweepNote">Runs each angle until steady and plots lift, drag and the polar.</p>
+    </div>
+
+    <div class="grp" id="exportGrp" hidden>
+      <span class="lab">Export</span>
+      <div class="seg"><button id="csv" disabled>Sweep CSV</button><button id="pdf">PDF report</button></div>
+      <p class="note" id="expNote">&nbsp;</p>
+    </div>
+  </aside>
+</div>
+
+<script src="lib/jspdf.umd.min.js"></script>
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+// ================= lattice (D2Q9) =================
+const EX=[0,1,0,-1,0,1,-1,-1,1], EY=[0,0,1,0,-1,1,1,-1,-1];
+const WT=[4/9,1/9,1/9,1/9,1/9,1/36,1/36,1/36,1/36], OPP=[0,3,4,1,2,7,8,5,6], MY=[0,1,4,3,2,8,7,6,5];
+const U0=0.08, RES=[[512,256],[768,384],[1024,512]];
+const arr=(t,a)=>`array<${t},9>(${a.map(v=>t==='f32'?v.toFixed(8):v+(t==='u32'?'u':'')).join(',')})`;
+const WGSL=`
+struct P { W:u32, H:u32, N:u32, ground:u32, u0:f32, tau:f32, px:f32, py:f32 };
+@group(0) @binding(0) var<uniform> p:P;
+@group(0) @binding(1) var<storage,read> fin:array<f32>;
+@group(0) @binding(2) var<storage,read_write> fout:array<f32>;
+@group(0) @binding(3) var<storage,read> solid:array<u32>;
+@group(0) @binding(4) var<storage,read_write> vel:array<vec4<f32>>;
+@group(0) @binding(5) var<storage,read_write> force:array<atomic<i32>,4>;
+var<private> EX:array<i32,9> = ${arr('i32',EX)};
+var<private> EY:array<i32,9> = ${arr('i32',EY)};
+var<private> WT:array<f32,9> = ${arr('f32',WT)};
+var<private> OPP:array<u32,9> = ${arr('u32',OPP)};
+var<private> MY:array<u32,9> = ${arr('u32',MY)};
+fn ev(i:u32)->vec2<f32>{ return vec2<f32>(f32(EX[i]),f32(EY[i])); }
+fn feq(i:u32,r:f32,u:vec2<f32>)->f32{ let eu=3.0*dot(ev(i),u); return WT[i]*r*(1.0+eu+0.5*eu*eu-1.5*dot(u,u)); }
+@compute @workgroup_size(128)
+fn init(@builtin(global_invocation_id) gid:vec3<u32>){
+  let c=gid.x; if(c>=p.N){return;}
+  for(var i=0u;i<9u;i++){ fout[i*p.N+c]=feq(i,1.0,vec2<f32>(p.u0,0.0)); }
+  vel[c]=vec4<f32>(p.u0,0.0,1.0,0.0);
+}
+var<workgroup> wf:array<vec3<f32>,128>;
+@compute @workgroup_size(128)
+fn step(@builtin(global_invocation_id) gid:vec3<u32>, @builtin(local_invocation_index) li:u32){
+  var fo=vec3<f32>(0.0);
+  if(gid.x<p.N){ fo=cell(gid.x); }
+  wf[li]=fo; workgroupBarrier();
+  for(var s=64u; s>0u; s=s>>1u){ if(li<s){ wf[li]=wf[li]+wf[li+s]; } workgroupBarrier(); }
+  if(li==0u){
+    let t=wf[0];
+    if(any(t!=vec3<f32>(0.0))){
+      atomicAdd(&force[0],i32(round(t.x*20000.0))); atomicAdd(&force[1],i32(round(t.y*20000.0))); atomicAdd(&force[2],i32(round(t.z*2000.0)));
+    }
+  }
+}
+// returns (Fx, Fy, Mz about the pivot) for the links of this cell that touch the body
+fn cell(c:u32)->vec3<f32>{
+  if(solid[c]!=0u){ vel[c]=vec4<f32>(0.0,0.0,1.0,0.0); return vec3<f32>(0.0); }
+  let W=i32(p.W); let H=i32(p.H); let N=p.N;
+  let ci=i32(c); let x=ci%W; let y=ci/W;
+  var fl:array<f32,9>; var eq:array<f32,9>;
+  var r=0.0; var m=vec2<f32>(0.0); var fo=vec3<f32>(0.0);
+  // pressure outlet: incoming populations at the exit use density 1 and the exit cell's own velocity
+  var uo=vec2<f32>(0.0);
+  if(x==W-1){ var rr=0.0; var mm=vec2<f32>(0.0); for(var j=0u;j<9u;j++){ let v=fin[j*N+c]; rr+=v; mm+=v*ev(j); } uo=mm/rr; }
+  for(var i=0u;i<9u;i++){
+    let sx=x-EX[i]; let sy=y-EY[i];
+    var v:f32;
+    if(sx<0){ v=feq(i,1.0,vec2<f32>(p.u0,0.0)); }
+    else if(sx>=W){ v=feq(i,1.0,uo); }
+    else if(sy<0){ if(p.ground==1u){ v=fin[OPP[i]*N+c]+6.0*WT[i]*f32(EX[i])*p.u0; } else { v=fin[MY[i]*N+c]; } }
+    else if(sy>=H){ v=fin[MY[i]*N+c]; }
+    else {
+      let s=u32(sx+W*sy);
+      if(solid[s]!=0u){
+        let o=OPP[i]; let fv=fin[o*N+c]; v=fv;
+        let F=2.0*(fv-WT[o])*ev(o);
+        let rx=f32(x)+0.5+0.5*f32(EX[o])-p.px; let ry=f32(y)+0.5+0.5*f32(EY[o])-p.py;
+        fo+=vec3<f32>(F.x,F.y,rx*F.y-ry*F.x);
+      }
+      else { v=fin[i*N+s]; }
+    }
+    fl[i]=v; r+=v; m+=v*ev(i);
+  }
+  var u=m/r; let sp=dot(u,u); if(sp>0.09){ u=u*(0.3/sqrt(sp)); }
+  var pxx=0.0; var pyy=0.0; var pxy=0.0;
+  for(var i=0u;i<9u;i++){
+    let e=feq(i,r,u); eq[i]=e; let d=fl[i]-e; let k=ev(i);
+    pxx+=d*k.x*k.x; pyy+=d*k.y*k.y; pxy+=d*k.x*k.y;
+  }
+  let Q=sqrt(pxx*pxx+pyy*pyy+2.0*pxy*pxy);
+  // calm-down zone before the exit, then a light Smagorinsky turbulence model (Cs 0.1, keeps thin boundary layers intact) and regularized collision
+  var t=p.tau; let sp0=f32(W)*0.8;
+  if(f32(x)>sp0){ let q=(f32(x)-sp0)/(f32(W)-sp0); t=t+0.4*q*q; }
+  let te=0.5*(t+sqrt(t*t+18.0*1.41421356*0.01*Q/r)); let om=1.0/te;
+  for(var i=0u;i<9u;i++){
+    let k=ev(i);
+    let fneq=WT[i]*4.5*((k.x*k.x-0.33333333)*pxx+(k.y*k.y-0.33333333)*pyy+2.0*k.x*k.y*pxy);
+    fout[i*N+c]=eq[i]+(1.0-om)*fneq;
+  }
+  vel[c]=vec4<f32>(u,r,0.0);
+  return fo;
+}`;
+
+// ================= profiles =================
+// a profile: closed polygons in chord units (leading edge at x=0, chord along +x, y up), a pivot and a default reference
+function naca4(code,n=140){
+  const m=+code[0]/100, pp=+code[1]/10, t=+code.slice(2)/100, up=[], lo=[];
+  for(let i=0;i<=n;i++){
+    const b=Math.PI*i/n, x=(1-Math.cos(b))/2;
+    const yt=5*t*(0.2969*Math.sqrt(x)-0.126*x-0.3516*x*x+0.2843*x**3-0.1036*x**4);
+    let yc=0,dy=0;
+    if(m>0&&pp>0){ if(x<pp){yc=m/pp/pp*(2*pp*x-x*x);dy=2*m/pp/pp*(pp-x);} else {yc=m/(1-pp)**2*(1-2*pp+2*pp*x-x*x);dy=2*m/(1-pp)**2*(pp-x);} }
+    const th=Math.atan(dy);
+    up.push([x-yt*Math.sin(th),yc+yt*Math.cos(th)]); lo.push([x+yt*Math.sin(th),yc-yt*Math.cos(th)]);
+  }
+  const poly=[]; for(let i=n;i>=0;i--)poly.push(...up[i]); for(let i=1;i<n;i++)poly.push(...lo[i]);
+  return poly;
+}
+function circle(n=160){const p=[];for(let i=0;i<n;i++){const a=i/n*Math.PI*2;p.push(.5-.5*Math.cos(a),.5*Math.sin(a));}return p;}
+function kamm(t,cut){ // NACA 00tt truncated at x=cut, rescaled to chord 1
+  const full=naca4('00'+String(Math.round(t*100)).padStart(2,'0'),200), p=[];
+  for(let i=0;i<full.length;i+=2)if(full[i]<=cut)p.push(full[i]/cut,full[i+1]/cut);
+  return p;
+}
+function makePreset(key){
+  const inv=$('invert').checked;
+  if(key==='naca'){const c=($('naca').value.replace(/\D/g,'')+'0012').slice(0,4);return {name:'NACA '+c,polys:[naca4(c)],pivot:[.25,0],ref:'chord'};}
+  if(key==='wing'){const g=[.985,-0.005, 1.0,-0.005, 1.0,-0.045, .985,-0.045]; // Gurney flap on the pressure side
+    const b=naca4('6412'); return {name:'Race wing (NACA 6412 + 2% Gurney)',polys:[b,g],pivot:[.25,.03],ref:'chord',defInvert:true};}
+  if(key==='blade')return {name:'Blade section (NACA 4409)',polys:[naca4('4409')],pivot:[.25,0],ref:'chord'};
+  if(key==='plate')return {name:'Flat plate 2%',polys:[[0,.01,1,.01,1,-.01,0,-.01]],pivot:[.5,0],ref:'chord'};
+  if(key==='round')return {name:'Round tube',polys:[circle()],pivot:[.5,0],ref:'frontal'};
+  if(key==='aero')return {name:'Aero tube (NACA 0033)',polys:[naca4('0033')],pivot:[.5,0],ref:'frontal'};
+  if(key==='kamm')return {name:'Kammtail tube',polys:[kamm(.30,.62)],pivot:[.5,0],ref:'frontal'};
+}
+function applyInvert(prof){
+  if(!$('invert').checked)return prof;
+  return {...prof,polys:prof.polys.map(p=>p.map((v,i)=>i%2?-v:v)),pivot:[prof.pivot[0],-prof.pivot[1]],name:prof.name+' (flipped)'};
+}
+
+// ---- airfoil coordinate files (Selig or Lednicer format)
+function parseDat(txt,name){
+  const pts=[];
+  for(const line of txt.split(/\r?\n/)){const n=line.trim().split(/[\s,;]+/).map(Number);if(n.length>=2&&n.every(v=>isFinite(v)))pts.push([n[0],n[1]]);}
+  if(pts.length<3)throw new Error('no coordinates');
+  let p=pts;
+  if(pts[0][0]>1.5&&pts[0][1]>1.5){ // Lednicer: counts line, upper LE->TE, lower LE->TE
+    const nu=Math.round(pts[0][0]), up=pts.slice(1,1+nu), lo=pts.slice(1+nu);
+    p=[...up.reverse(),...lo.slice(1)];
+  }
+  let x0=1e9,x1=-1e9; for(const q of p){x0=Math.min(x0,q[0]);x1=Math.max(x1,q[0]);}
+  const c=(x1-x0)||1, poly=[]; for(const q of p)poly.push((q[0]-x0)/c,q[1]/c);
+  return {name:name.replace(/\.[a-z]+$/i,''),polys:[poly],pivot:[.25,0],ref:'chord'};
+}
+// ---- meshes: cut an exact section through the triangles
+function parseSTL(buf){
+  const dv=new DataView(buf), n=dv.byteLength>=84?dv.getUint32(80,true):0;
+  if(n>0&&84+n*50===dv.byteLength){const o=new Float32Array(n*9);for(let i=0;i<n;i++){const b=84+i*50+12;for(let k=0;k<9;k++)o[i*9+k]=dv.getFloat32(b+k*4,true);}return o;}
+  const txt=new TextDecoder().decode(buf),v=[],re=/vertex\s+([-\d.eE+]+)\s+([-\d.eE+]+)\s+([-\d.eE+]+)/g;let m;
+  while((m=re.exec(txt)))v.push(+m[1],+m[2],+m[3]); return new Float32Array(v);
+}
+function parseOBJ(txt){
+  const vs=[],o=[];
+  for(const line of txt.split('\n')){
+    if(line.startsWith('v ')){const p=line.trim().split(/\s+/);vs.push([+p[1],+p[2],+p[3]]);}
+    else if(line.startsWith('f ')){const ids=line.trim().split(/\s+/).slice(1).map(t=>{const k=parseInt(t);return k<0?vs.length+k:k-1;});
+      for(let i=1;i+1<ids.length;i++)for(const j of [ids[0],ids[i],ids[i+1]]){const p=vs[j]||[0,0,0];o.push(p[0],p[1],p[2]);}}
+  }
+  return new Float32Array(o);
+}
+// same orientation rules as the 3D tunnel: chosen axis is up, the longer horizontal axis is the length, Flip turns it 180°
+function orientMesh(raw){
+  const T=new Float32Array(raw.length);
+  for(let i=0;i<raw.length;i+=3){let x=raw[i],y=raw[i+1],z=raw[i+2],a=x,b=y,c=z;
+    if(S.up===2){a=x;b=z;c=-y;}else if(S.up===0){a=-y;b=x;c=z;} T[i]=a;T[i+1]=b;T[i+2]=c;}
+  let lo=[1e9,1e9,1e9],hi=[-1e9,-1e9,-1e9];
+  for(let i=0;i<T.length;i+=3)for(let k=0;k<3;k++){lo[k]=Math.min(lo[k],T[i+k]);hi[k]=Math.max(hi[k],T[i+k]);}
+  const swap=hi[2]-lo[2]>hi[0]-lo[0];
+  for(let i=0;i<T.length;i+=3){let a=T[i],c=T[i+2]; if(swap){const t=a;a=c;c=-t;} if(S.flip){a=-a;c=-c;} T[i]=a;T[i+2]=c;}
+  return T;
+}
+function cutMesh(){
+  const T=S.meshT, side=S.cut==='side';
+  // plane: side cut = z constant (section shows x-y); top cut = y constant (section shows x-z, seen from above)
+  const ax=side?2:1; let lo=1e9,hi=-1e9; for(let i=ax;i<T.length;i+=3){lo=Math.min(lo,T[i]);hi=Math.max(hi,T[i]);}
+  const k=lo+(hi-lo)*S.cutPos, segs=[];
+  for(let t=0;t<T.length;t+=9){
+    const P=[0,1,2].map(j=>[T[t+j*3],T[t+j*3+1],T[t+j*3+2]]), d=P.map(p=>p[ax]-k), pts=[];
+    for(let j=0;j<3;j++){const a=P[j],b=P[(j+1)%3],da=d[j],db=d[(j+1)%3];
+      if((da<0)!==(db<0)){const s=da/(da-db);pts.push([a[0]+(b[0]-a[0])*s, side?a[1]+(b[1]-a[1])*s : -(a[2]+(b[2]-a[2])*s)]);}}
+    if(pts.length===2)segs.push(pts);
+  }
+  if(!segs.length)return null;
+  // chain the segments into closed loops by matching endpoints
+  const key=p=>Math.round(p[0]*1e4)+','+Math.round(p[1]*1e4), ends=new Map();
+  segs.forEach((s,i)=>{for(const e of [0,1]){const kk=key(s[e]);(ends.get(kk)||ends.set(kk,[]).get(kk)).push(i);}});
+  const used=new Uint8Array(segs.length), loops=[];
+  for(let i=0;i<segs.length;i++){
+    if(used[i])continue; used[i]=1; const loop=[segs[i][0],segs[i][1]]; let cur=segs[i][1];
+    for(let guard=0;guard<segs.length;guard++){
+      const cand=(ends.get(key(cur))||[]).find(j=>!used[j]); if(cand===undefined)break;
+      used[cand]=1; const s=segs[cand], nxt=key(s[0])===key(cur)?s[1]:s[0]; loop.push(nxt); cur=nxt;
+    }
+    if(loop.length>=3)loops.push(loop);
+  }
+  let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9;
+  for(const L of loops)for(const p of L){x0=Math.min(x0,p[0]);x1=Math.max(x1,p[0]);y0=Math.min(y0,p[1]);y1=Math.max(y1,p[1]);}
+  const c=(x1-x0)||1, ym=(y0+y1)/2;
+  return {polys:loops.map(L=>L.flatMap(p=>[(p[0]-x0)/c,(p[1]-ym)/c])),loops:loops.length,pivot:[.25,0]};
+}
+
+// ================= state =================
+const S={res:1,mode:'vel',lines:true,paused:false,speed:100,angle:4,size:.18,ground:false,ride:.4,ref:'chord',
+  chord:.3,span:1,cx:.3,cy:.5,prof:null,presetKey:'naca',mesh:null,meshT:null,meshName:'',up:2,flip:false,cut:'side',cutPos:.5,damp:1};
+let W,H,N,device,layout,pipeStep,pipeInit,bgA,bgB,bufs={},solid,field=null,maxBinding=0;
+let tau=.52,chordCells=1,frontalCells=1,pivotCells=[0,0],solidBox=null;
+let needMask=true,gpuBusy=false,gen=0,pending=false,lastRead=0,stepsAcc=0,settle=0,spf=8,flipPing=false,stepsWindow=0,winStart=performance.now(),stepsPerSec=0;
+let hist=[],cur=null,note='',noteUntil=0;
+
+// ================= mask: profile -> solid cells =================
+// The profile is drawn once into a high-resolution picture; moving or tilting it then only redraws that picture.
+const SIL=2048, PAD=6; let sil=null, silFor=null, silBox=null;
+const mc=document.createElement('canvas'), mctx=mc.getContext('2d',{willReadFrequently:true});
+function makeSil(){
+  const P=S.prof; let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9;
+  for(const p of P.polys)for(let i=0;i<p.length;i+=2){x0=Math.min(x0,p[i]);x1=Math.max(x1,p[i]);y0=Math.min(y0,p[i+1]);y1=Math.max(y1,p[i+1]);}
+  silBox={x0,x1,y0,y1}; sil=document.createElement('canvas');
+  sil.width=Math.ceil((x1-x0)*SIL)+PAD*2; sil.height=Math.max(8,Math.ceil((y1-y0)*SIL)+PAD*2);
+  // every outline is filled as solid (union): inner surfaces of a mesh must not punch holes of air into the body
+  const x=sil.getContext('2d'); x.fillStyle='#fff';
+  for(const p of P.polys){x.beginPath();x.moveTo((p[0]-x0)*SIL+PAD,(y1-p[1])*SIL+PAD);for(let i=2;i<p.length;i+=2)x.lineTo((p[i]-x0)*SIL+PAD,(y1-p[i+1])*SIL+PAD);x.closePath();x.fill('nonzero');}
+  silFor=P;
+}
+function buildMask(){
+  needMask=false; if(!S.prof||!W)return;
+  if(silFor!==S.prof)makeSil();
+  const c=S.size*W, k=c/SIL, P=S.prof, b=silBox;
+  if(S.ground)S.cy=(S.ride*c+lowestBelowPivot()*c)/H;
+  const px=S.cx*W, py=H-S.cy*H; pivotCells=[px,S.cy*H];
+  mc.width=W; mc.height=H; mctx.setTransform(1,0,0,1,0,0); mctx.clearRect(0,0,W,H);
+  mctx.translate(px,py); mctx.rotate(S.angle*Math.PI/180); mctx.scale(k,k);
+  mctx.drawImage(sil,-((P.pivot[0]-b.x0)*SIL+PAD),-((b.y1-P.pivot[1])*SIL+PAD));
+  const a=mctx.getImageData(0,0,W,H).data; let rmin=H,rmax=-1,cmin=W,cmax=-1;
+  for(let yy=0;yy<H;yy++){const y=H-1-yy;for(let x=0;x<W;x++){
+    const s=(x>1&&x<W-2&&a[(yy*W+x)*4+3]>110)?1:0; solid[x+W*y]=s;
+    if(s){if(y<rmin)rmin=y;if(y>rmax)rmax=y;if(x<cmin)cmin=x;if(x>cmax)cmax=x;}}}
+  chordCells=c; frontalCells=Math.max(1,rmax-rmin+1); solidBox=rmax>=0?{x0:cmin,x1:cmax,y0:rmin,y1:rmax}:null;
+  if(device&&bufs.solid)device.queue.writeBuffer(bufs.solid,0,solid);
+  writeParams(); clearHist(); showStatic();
+}
+// how far the profile reaches below the pivot at the current angle, in chords (used to keep the ride height above the floor)
+function lowestBelowPivot(){
+  const P=S.prof,a=S.angle*Math.PI/180,ca=Math.cos(a),sa=Math.sin(a); let lo=0;
+  for(const p of P.polys)for(let i=0;i<p.length;i+=2){const dx=p[i]-P.pivot[0],dy=p[i+1]-P.pivot[1];lo=Math.max(lo,-( -dx*sa+dy*ca));}
+  return lo;
+}
+
+// ================= GPU =================
+async function initGPU(){
+  if(!navigator.gpu)return fail('This browser has no WebGPU. Use a current Chrome or Edge on Windows, or Chrome or Safari 26+ on Mac.');
+  const ad=await navigator.gpu.requestAdapter({powerPreference:'high-performance'});
+  if(!ad)return fail('WebGPU is present but no graphics adapter was found. Update the browser and graphics driver, then reload.');
+  maxBinding=Math.min(ad.limits.maxStorageBufferBindingSize,ad.limits.maxBufferSize);
+  device=await ad.requestDevice({requiredLimits:{maxStorageBufferBindingSize:maxBinding,maxBufferSize:maxBinding}});
+  device.lost.then(i=>fail('The GPU stopped the simulation ('+(i.message||'device lost')+'). Reload the page.'));
+  const mod=device.createShaderModule({code:WGSL});
+  const ent=(b,type)=>({binding:b,visibility:GPUShaderStage.COMPUTE,buffer:{type}});
+  layout=device.createBindGroupLayout({entries:[ent(0,'uniform'),ent(1,'read-only-storage'),ent(2,'storage'),ent(3,'read-only-storage'),ent(4,'storage'),ent(5,'storage')]});
+  const pl=device.createPipelineLayout({bindGroupLayouts:[layout]});
+  pipeStep=device.createComputePipeline({layout:pl,compute:{module:mod,entryPoint:'step'}});
+  pipeInit=device.createComputePipeline({layout:pl,compute:{module:mod,entryPoint:'init'}});
+  return true;
+}
+function fail(t){$('msgText').textContent=t;$('msg').hidden=false;return false;}
+function alloc(){
+  [W,H]=RES[S.res]; N=W*H;
+  for(const k in bufs)bufs[k].destroy();
+  const SU=GPUBufferUsage, mk=(size,usage)=>device.createBuffer({size,usage});
+  bufs={f0:mk(9*N*4,SU.STORAGE),f1:mk(9*N*4,SU.STORAGE),solid:mk(N*4,SU.STORAGE|SU.COPY_DST),vel:mk(N*16,SU.STORAGE|SU.COPY_SRC),
+    force:mk(16,SU.STORAGE|SU.COPY_SRC|SU.COPY_DST),params:mk(32,SU.UNIFORM|SU.COPY_DST),velStage:mk(N*16,SU.MAP_READ|SU.COPY_DST),forceStage:mk(16,SU.MAP_READ|SU.COPY_DST)};
+  const bg=(a,b)=>device.createBindGroup({layout,entries:[{binding:0,resource:{buffer:bufs.params}},{binding:1,resource:{buffer:a}},{binding:2,resource:{buffer:b}},
+    {binding:3,resource:{buffer:bufs.solid}},{binding:4,resource:{buffer:bufs.vel}},{binding:5,resource:{buffer:bufs.force}}]});
+  bgA=bg(bufs.f0,bufs.f1); bgB=bg(bufs.f1,bufs.f0);
+  solid=new Uint32Array(N); field=null; pending=false; gpuBusy=false; gen++; stepsAcc=0; spf=8;
+  resize(); seedParticles(); buildMask(); resetFlow();
+}
+function updateTau(){
+  // simulated Reynolds number: the real one when the grid can resolve it, otherwise capped by what the grid can carry
+  const reReal=(S.speed/3.6)*S.chord/1.5e-5, cap=140*chordCells/S.damp, reSim=Math.max(200,Math.min(reReal,cap));
+  tau=Math.max(.5003,3*U0*chordCells/reSim+.5); return {reReal,reSim};
+}
+function writeParams(){
+  if(!device||!bufs.params)return; updateTau();
+  const b=new ArrayBuffer(32),u=new Uint32Array(b),f=new Float32Array(b);
+  u[0]=W;u[1]=H;u[2]=N;u[3]=S.ground?1:0;f[4]=U0;f[5]=tau;f[6]=pivotCells[0];f[7]=pivotCells[1];
+  device.queue.writeBuffer(bufs.params,0,b);
+}
+function resetFlow(){
+  if(!device||!bufs.f0)return; writeParams();
+  const e=device.createCommandEncoder(), wg=Math.ceil(N/128);
+  for(const g of [bgA,bgB]){const p=e.beginComputePass();p.setPipeline(pipeInit);p.setBindGroup(0,g);p.dispatchWorkgroups(wg);p.end();}
+  e.clearBuffer(bufs.force); device.queue.submit([e.finish()]); clearHist(); seedParticles();
+}
+// one batch of steps at a time; batch size adapts to ~10 ms of GPU work so the page stays responsive
+function simTick(){
+  if(gpuBusy||!device||!bufs.f0)return;
+  if(needMask)buildMask();
+  const now=performance.now(), enc=device.createCommandEncoder(), steps=S.paused?0:spf;
+  if(steps){const wg=Math.ceil(N/128),p=enc.beginComputePass();p.setPipeline(pipeStep);
+    for(let i=0;i<steps;i++){p.setBindGroup(0,flipPing?bgB:bgA);p.dispatchWorkgroups(wg);flipPing=!flipPing;} p.end(); stepsAcc+=steps; settle+=steps;}
+  let readSteps=-1;
+  if(!pending&&now-lastRead>70){
+    enc.copyBufferToBuffer(bufs.vel,0,bufs.velStage,0,N*16); enc.copyBufferToBuffer(bufs.force,0,bufs.forceStage,0,16);
+    enc.clearBuffer(bufs.force); readSteps=stepsAcc; stepsAcc=0; pending=true; lastRead=now;
+  }
+  device.queue.submit([enc.finish()]);
+  gpuBusy=true; const myGen=gen, vs=bufs.velStage, fs=bufs.forceStage;
+  device.queue.onSubmittedWorkDone().then(()=>{
+    if(myGen!==gen)return; gpuBusy=false;
+    if(steps){stepsWindow+=steps; const dt=performance.now()-now; spf=Math.max(1,Math.min(200,Math.round(spf*.6+steps*10/Math.max(1,dt)*.4)));}
+    if(readSteps>=0)Promise.all([vs.mapAsync(GPUMapMode.READ),fs.mapAsync(GPUMapMode.READ)]).then(()=>{
+      if(myGen!==gen)return;
+      if(!field||field.length!==N*4)field=new Float32Array(N*4);
+      field.set(new Float32Array(vs.getMappedRange())); vs.unmap();
+      const F=new Int32Array(fs.getMappedRange()).slice(); fs.unmap(); pending=false; onField(F,readSteps);
+    }).catch(()=>{if(myGen===gen)pending=false;});
+  });
+}
+
+// ================= readings =================
+function clearHist(){hist=[];settle=0;cur=null;}
+const flowThrough=()=>W/U0;
+function onField(F,steps){
+  for(let i=2;i<field.length;i+=4*331){const r=field[i];if(!(r>.2&&r<5)){S.damp=Math.min(8,S.damp*1.6);resetFlow();field=null;
+    note='Flow turned unstable, so it restarted with extra damping ('+S.damp.toFixed(1)+'×).';noteUntil=performance.now()+8000;return;}}
+  if(steps>0&&settle>=.25*flowThrough()){const qL=.5*U0*U0;hist.push({s:steps,x:F[0]/2e4/steps/qL,y:F[1]/2e4/steps/qL,m:F[2]/2000/steps/qL});}
+  judge(); paintField(); sweepTick();
+}
+function coeffs(h){ // raw lattice forces -> coefficients with the chosen reference length
+  const L=S.ref==='chord'?chordCells:frontalCells;
+  return {cd:h.x/L,cl:h.y/L,cm:-h.m/(chordCells*chordCells)};
+}
+function judge(){
+  const win=.3*flowThrough(); let tot=0,k=hist.length; while(k>0&&tot<win){k--;tot+=hist[k].s;} if(k>0)hist.splice(0,k);
+  const st=$('status'),nt=$('statusNote');
+  if(tot<win){cur=null;st.className='chip wait';st.textContent='settling '+Math.min(99,Math.round(settle/(.25*flowThrough()+win)*100))+'%';nt.textContent='flow adjusting';
+    ['cl','cd','ld','cm'].forEach(i=>$(i).textContent='–');$('clVar').innerHTML=$('cdVar').innerHTML='&nbsp;';showReal();return;}
+  let sx=0,sy=0,sm=0,a={x:0,y:0,n:0},b={x:0,y:0,n:0},run=0,mn=1e9,mx=-1e9,mnd=1e9,mxd=-1e9;
+  for(const h of hist){sx+=h.x*h.s;sy+=h.y*h.s;sm+=h.m*h.s;const t=run<tot/2?a:b;t.x+=h.x*h.s;t.y+=h.y*h.s;t.n+=h.s;run+=h.s;
+    mn=Math.min(mn,h.y);mx=Math.max(mx,h.y);mnd=Math.min(mnd,h.x);mxd=Math.max(mxd,h.x);}
+  const c=coeffs({x:sx/tot,y:sy/tot,m:sm/tot}), L=S.ref==='chord'?chordCells:frontalCells;
+  const dCl=Math.abs(b.y/b.n-a.y/a.n)/L/Math.max(.2,Math.abs(c.cl)), dCd=Math.abs(b.x/b.n-a.x/a.n)/L/Math.max(.02,Math.abs(c.cd)), drift=Math.max(dCl,dCd);
+  cur={...c,drift,steady:drift<.02,swingCl:(mx-mn)/2/L,swingCd:(mxd-mnd)/2/L};
+  const f3=v=>(Math.abs(v)<.0005?0:v).toFixed(3);
+  $('cl').textContent=f3(c.cl);$('cd').textContent=c.cd.toFixed(4);$('ld').textContent=Math.abs(c.cd)>1e-4?(c.cl/c.cd).toFixed(1):'–';$('cm').textContent=f3(c.cm);
+  $('clVar').textContent='swings ±'+cur.swingCl.toFixed(3);$('cdVar').textContent='swings ±'+cur.swingCd.toFixed(4);
+  if(cur.steady){st.className='chip go';st.textContent='steady';nt.textContent='safe to compare';}
+  else{st.className='chip wait';st.textContent='drifting '+Math.round(drift*100)+'%';nt.textContent='still changing, keep running';}
+  showReal();
+}
+function showStatic(){
+  const {reReal,reSim}=updateTau(), fmt=r=>r>=1e6?(r/1e6).toFixed(2)+' M':r>=1e3?Math.round(r/1e3)+' k':Math.round(r)+'';
+  $('reReal').textContent=fmt(reReal);$('reSim').textContent=fmt(reSim);
+  $('block').textContent=(frontalCells/H*100).toFixed(1)+'%';
+  const m=S.chord/chordCells; $('refL').textContent=((S.ref==='chord'?chordCells:frontalCells)*m*1000).toFixed(0)+' mm';
+  $('refNote').textContent=S.ref==='chord'?'chord':'frontal height at this angle';
+  $('spanLab').textContent=S.span+' m'; showReal(); legend();
+}
+function showReal(){
+  const V=S.speed/3.6,q=.5*1.225*V*V,Lm=(S.ref==='chord'?chordCells:frontalCells)*S.chord/chordCells;
+  if(!cur){['liftN','dragN','dragW'].forEach(i=>$(i).textContent='–');['liftKg','dragKg'].forEach(i=>$(i).innerHTML='&nbsp;');return;}
+  const Lf=cur.cl*q*Lm*S.span, Df=cur.cd*q*Lm*S.span, fmt=f=>Math.abs(f)>=1000?(f/1000).toFixed(2)+' kN':Math.abs(f)>=10?f.toFixed(1)+' N':f.toFixed(2)+' N';
+  $('liftNLab').textContent=Lf<0?'Downforce':'Lift'; $('liftN').textContent=fmt(Math.abs(Lf)); $('liftKg').textContent=(Math.abs(Lf)/9.81).toFixed(2)+' kg';
+  $('dragN').textContent=fmt(Df); $('dragKg').textContent=(Df/9.81).toFixed(2)+' kg';
+  const P=Df*V; $('dragW').textContent=P>=1000?(P/1000).toFixed(2)+' kW':P.toFixed(P<10?2:0)+' W';
+}
+
+// ================= drawing the tunnel =================
+function lut(stops){const o=new Uint32Array(256);for(let i=0;i<256;i++){const t=i/255*(stops.length-1),k=Math.min(stops.length-2,t|0),u=t-k,a=stops[k],b=stops[k+1];
+  o[i]=(255<<24)|((a[2]+(b[2]-a[2])*u)<<16)|((a[1]+(b[1]-a[1])*u)<<8)|(a[0]+(b[0]-a[0])*u);}return o;}
+const RAIN=lut([[20,30,160],[30,120,240],[30,210,230],[60,210,80],[230,230,40],[245,130,20],[220,30,30]]);
+const SWIRL=lut([[40,110,255],[25,45,90],[12,14,20],[90,30,30],[255,80,60]]);
+const BODY=(255<<24)|(234<<16)|(229<<8)|226;
+const view=$('view'),vctx=view.getContext('2d'),fc=document.createElement('canvas'),fctx=fc.getContext('2d'); let img=null;
+const CP_LO=-3,CP_HI=1;
+function paintField(){
+  if(!field)return;
+  if(fc.width!==W||fc.height!==H||!img){fc.width=W;fc.height=H;img=fctx.createImageData(W,H);}
+  const px=new Uint32Array(img.data.buffer),q=.5*U0*U0,mode=S.mode;
+  for(let y=0;y<H;y++){const row=(H-1-y)*W;for(let x=0;x<W;x++){
+    const c=x+y*W; if(solid[c]){px[row+x]=BODY;continue;} const f=c*4; let v,L=RAIN;
+    if(mode==='vel')v=Math.hypot(field[f],field[f+1])/(U0*1.6);
+    else if(mode==='pres')v=((field[f+2]-1)/3/q-CP_LO)/(CP_HI-CP_LO);
+    else{const xl=Math.max(0,x-1),xr=Math.min(W-1,x+1),yd=Math.max(0,y-1),yu=Math.min(H-1,y+1);
+      v=.5+((field[(xr+y*W)*4+1]-field[(xl+y*W)*4+1])-(field[(x+yu*W)*4]-field[(x+yd*W)*4]))/U0*1.2;L=SWIRL;}
+    px[row+x]=L[((v<0?0:v>1?1:v)*255)|0];
+  }}
+  fctx.putImageData(img,0,0);
+}
+const NP=2600,HIST=8; let PX,PY,PH;
+function seedParticles(){PX=new Float32Array(NP);PY=new Float32Array(NP);PH=new Float32Array(NP*HIST*2);for(let p=0;p<NP;p++)spawn(p,Math.random()*(W||100));}
+function spawn(p,x){PX[p]=x;PY[p]=1+Math.random()*((H||50)-2);for(let k=0;k<HIST;k++){PH[(p*HIST+k)*2]=PX[p];PH[(p*HIST+k)*2+1]=PY[p];}}
+function moveParticles(k){
+  for(let p=0;p<NP;p++){const xi=PX[p]|0,yi=PY[p]|0,c=xi+yi*W;
+    if(xi<0||xi>=W||yi<0||yi>=H||solid[c]){spawn(p,0);continue;}
+    PX[p]+=field[c*4]*k;PY[p]+=field[c*4+1]*k;const b=p*HIST*2;PH.copyWithin(b+2,b,b+(HIST-1)*2);PH[b]=PX[p];PH[b+1]=PY[p];if(PX[p]>=W-1)spawn(p,0);}
+}
+function drawView(){
+  vctx.fillStyle='#000';vctx.fillRect(0,0,view.width,view.height);
+  if(fc.width){vctx.imageSmoothingEnabled=true;vctx.drawImage(fc,0,0,view.width,view.height);}
+  const sx=view.width/W,sy=view.height/H;
+  if(S.lines&&field&&PH){vctx.strokeStyle='rgba(255,255,255,.5)';vctx.lineWidth=Math.max(1,devicePixelRatio*.8);vctx.beginPath();
+    for(let p=0;p<NP;p++){const b=p*HIST*2;vctx.moveTo(PH[b]*sx,(H-PH[b+1])*sy);
+      for(let k=1;k<HIST;k++){const hx=PH[b+k*2],hy=PH[b+k*2+1];if(Math.abs(hx-PH[b+k*2-2])>W/3)break;vctx.lineTo(hx*sx,(H-hy)*sy);}}
+    vctx.stroke();}
+  // pivot marker
+  const px=pivotCells[0]*sx,py=(H-pivotCells[1])*sy;vctx.strokeStyle='rgba(13,17,23,.85)';vctx.lineWidth=2;vctx.beginPath();vctx.moveTo(px-5,py);vctx.lineTo(px+5,py);vctx.moveTo(px,py-5);vctx.lineTo(px,py+5);vctx.stroke();
+  if(S.ground){vctx.fillStyle='rgba(255,255,255,.4)';vctx.fillRect(0,view.height-2,view.width,2);}
+}
+function legend(){
+  const lc=$('leg'),x=lc.getContext('2d'),d=x.createImageData(256,1),L=S.mode==='vort'?SWIRL:RAIN;new Uint32Array(d.data.buffer).set(L);x.putImageData(d,0,0);
+  const V=S.speed/3.6,q=.5*1.225*V*V;
+  if(S.mode==='vel'){$('legName').textContent='Air speed';$('legLo').textContent='0 km/h';$('legHi').textContent=Math.round(S.speed*1.6)+' km/h';}
+  else if(S.mode==='pres'){$('legName').textContent='Pressure';$('legLo').textContent=Math.round(CP_LO*q)+' Pa (Cp '+CP_LO+')';$('legHi').textContent='+'+Math.round(CP_HI*q)+' Pa';}
+  else{$('legName').textContent='Swirl';$('legLo').textContent='clockwise';$('legHi').textContent='counter-clockwise';}
+}
+function resize(){
+  const r=$('tunnel').getBoundingClientRect(),d=devicePixelRatio||1,a=W&&H?W/H:2;
+  view.width=Math.round(r.width*d);view.height=Math.round(r.width/a*d);view.style.height=(r.width/a)+'px';
+  drawCharts();
+}
+
+// ================= angle sweep =================
+let sweep=null, results=[], resultsName='', refRun=null;
+function startSweep(){
+  const a0=+$('swFrom').value,a1=+$('swTo').value,st=Math.max(.5,Math.abs(+$('swStep').value)||2);
+  if(!(a1>a0)){$('sweepNote').textContent='"To" must be larger than "From".';return;}
+  const list=[];for(let a=a0;a<=a1+1e-9;a+=st)list.push(+a.toFixed(2));
+  if(list.length>40){$('sweepNote').textContent='That is '+list.length+' angles. Use a bigger step (40 at most).';return;}
+  results=[]; resultsName=S.prof.name+' @ '+S.speed+' km/h'; sweep={list,i:0,startSettle:0}; setAngle(list[0]); S.paused=false; syncPause();
+  $('runSweep').textContent='Stop sweep'; $('ang').disabled=true; renderResults();
+}
+function stopSweep(msg){sweep=null;$('runSweep').textContent='Run sweep';$('ang').disabled=false;$('sweepNote').textContent=msg||'Sweep stopped.';$('pin').disabled=!results.length;$('csv').disabled=!results.length;}
+function sweepTick(){
+  if(!sweep||needMask)return;
+  const a=sweep.list[sweep.i], maxSteps=(.25+.3*5)*flowThrough();
+  $('sweepNote').textContent=`Angle ${sweep.i+1} of ${sweep.list.length} · ${a}° · ${$('status').textContent}`;
+  if(!cur)return;
+  const done=cur.steady||settle>maxSteps; if(!done)return;
+  results.push({a,cl:cur.cl,cd:cur.cd,cm:cur.cm,steady:cur.steady});
+  renderResults();
+  if(++sweep.i>=sweep.list.length){stopSweep('Sweep finished: '+results.length+' angles.');return;}
+  setAngle(sweep.list[sweep.i]);
+}
+function setAngle(a){S.angle=a;$('ang').value=a;$('angOut').textContent=a+'°';needMask=true;}
+function renderResults(){
+  const t=$('table');
+  if(!results.length){t.innerHTML='<div class="empty">'+(sweep?'Waiting for the first angle to settle…':'Run a sweep to fill this table. Each angle runs until its readings are steady, then the next angle starts.')+'</div>';drawCharts();return;}
+  let best=-1,bi=-1;results.forEach((r,i)=>{const ld=r.cd>1e-4?r.cl/r.cd:-1e9;if(ld>best){best=ld;bi=i;}});
+  const rows=results.map((r,i)=>`<tr class="${i===bi?'best':''}"><td>${r.a}°</td><td>${r.cl.toFixed(3)}</td><td>${r.cd.toFixed(4)}</td><td>${r.cd>1e-4?(r.cl/r.cd).toFixed(1):'–'}</td><td>${r.cm.toFixed(3)}</td><td>${(r.steady?'steady':'averaged (unsteady wake)')+(i===bi?' · best L/D':'')}</td></tr>`).join('');
+  t.innerHTML=`<table><thead><tr><th scope="col">Angle</th><th scope="col">Cl</th><th scope="col">Cd</th><th scope="col">L/D</th><th scope="col">Cm</th><th scope="col">Reading</th></tr></thead><tbody>${rows}</tbody></table>`;
+  drawCharts();
+}
+// ---- charts: one measure per chart, shared angle axis, hover tooltips
+const THEME_DARK={bg:'#151b24',grid:'#222b38',axis:'#3a4658',text:'#8794a8',ink:'#e4e9f0',s1:'#3987e5',s2:'#d95926'};
+const THEME_LIGHT={bg:'#ffffff',grid:'#e6e9ee',axis:'#b8c0cc',text:'#5a6474',ink:'#1a1f27',s1:'#2a78d6',s2:'#eb6834'};
+const CHARTS=[{id:'chCl',x:'a',y:'cl',xl:'angle °',yl:'Cl'},{id:'chCd',x:'a',y:'cd',xl:'angle °',yl:'Cd'},{id:'chPolar',x:'cd',y:'cl',xl:'Cd',yl:'Cl'}];
+function niceTicks(lo,hi,n=5){if(lo===hi){lo-=1;hi+=1;}const span=hi-lo,step0=span/n,mag=10**Math.floor(Math.log10(step0)),st=[1,2,2.5,5,10].map(m=>m*mag).find(s=>s>=step0);
+  const a=Math.floor(lo/st)*st,b=Math.ceil(hi/st)*st,t=[];for(let v=a;v<=b+st*1e-6;v+=st)t.push(+v.toFixed(10));return {t,lo:a,hi:b};}
+function chartGeom(spec,w,h){
+  const series=[results,...(refRun?[refRun.results]:[])].filter(s=>s.length);
+  const xs=series.flat().map(r=>r[spec.x]),ys=series.flat().map(r=>r[spec.y]);
+  if(!xs.length)return null;
+  const X=niceTicks(Math.min(...xs),Math.max(...xs)),Y=niceTicks(Math.min(spec.y==='cd'?0:Infinity,...ys),Math.max(...ys));
+  const l=44,r=10,t=8,b=30;
+  return {X,Y,l,r,t,b,sx:v=>l+(v-X.lo)/(X.hi-X.lo)*(w-l-r),sy:v=>h-b-(v-Y.lo)/(Y.hi-Y.lo)*(h-t-b)};
+}
+function drawChart(ctx,spec,w,h,T){
+  ctx.fillStyle=T.bg;ctx.fillRect(0,0,w,h);
+  const g=chartGeom(spec,w,h); ctx.font='11px "IBM Plex Mono", ui-monospace, monospace';
+  if(!g){ctx.fillStyle=T.text;ctx.textAlign='center';ctx.fillText('no data yet',w/2,h/2);return null;}
+  ctx.lineWidth=1;ctx.strokeStyle=T.grid;ctx.fillStyle=T.text;
+  for(const v of g.Y.t){const y=Math.round(g.sy(v))+.5;ctx.beginPath();ctx.moveTo(g.l,y);ctx.lineTo(w-g.r,y);ctx.stroke();ctx.textAlign='right';ctx.textBaseline='middle';ctx.fillText(+v.toFixed(4)+'',g.l-6,y);}
+  for(const v of g.X.t){const x=Math.round(g.sx(v))+.5;ctx.beginPath();ctx.moveTo(x,g.t);ctx.lineTo(x,h-g.b);ctx.stroke();ctx.textAlign='center';ctx.textBaseline='top';ctx.fillText(+v.toFixed(4)+'',x,h-g.b+5);}
+  if(g.Y.lo<0&&g.Y.hi>0){ctx.strokeStyle=T.axis;const y=Math.round(g.sy(0))+.5;ctx.beginPath();ctx.moveTo(g.l,y);ctx.lineTo(w-g.r,y);ctx.stroke();}
+  ctx.textAlign='right';ctx.textBaseline='bottom';ctx.fillText(spec.xl,w-g.r,h-g.b-3);
+  const draw=(data,col)=>{if(!data.length)return;ctx.strokeStyle=col;ctx.lineWidth=2;ctx.lineJoin=ctx.lineCap='round';ctx.beginPath();
+    data.forEach((r,i)=>{const x=g.sx(r[spec.x]),y=g.sy(r[spec.y]);i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.stroke();
+    for(const r of data){const x=g.sx(r[spec.x]),y=g.sy(r[spec.y]);ctx.beginPath();ctx.arc(x,y,6,0,7);ctx.fillStyle=T.bg;ctx.fill();ctx.beginPath();ctx.arc(x,y,4,0,7);
+      if(r.steady){ctx.fillStyle=col;ctx.fill();}else{ctx.strokeStyle=col;ctx.lineWidth=1.5;ctx.stroke();ctx.lineWidth=2;}}};
+  if(refRun)draw(refRun.results,T.s2); draw(results,T.s1);
+  return g;
+}
+const chartState={};
+function drawCharts(){
+  for(const spec of CHARTS){const cv=$(spec.id),r=cv.getBoundingClientRect(),d=devicePixelRatio||1;if(!r.width)continue;
+    cv.width=Math.round(r.width*d);cv.height=Math.round(r.height*d);const ctx=cv.getContext('2d');ctx.setTransform(d,0,0,d,0,0);
+    chartState[spec.id]=drawChart(ctx,spec,r.width,r.height,THEME_DARK);}
+  const k=$('keys');k.innerHTML='';
+  if(results.length||refRun){const add=(c,t)=>{const s=document.createElement('span');s.innerHTML='<i style="background:'+c+'"></i>';s.append(t);k.append(s);};
+    if(results.length)add(THEME_DARK.s1,resultsName); if(refRun)add(THEME_DARK.s2,refRun.name+' (reference)');
+    const s=document.createElement('span');s.textContent='○ = unsteady wake, averaged';k.append(s);}
+}
+let tipEl=null;
+for(const spec of CHARTS){
+  const cv=$(spec.id);
+  cv.addEventListener('pointermove',ev=>{
+    const g=chartState[spec.id]; if(!g)return; const r=cv.getBoundingClientRect(),mx=ev.clientX-r.left,my=ev.clientY-r.top; let best=null,bd=18;
+    for(const [data,lab] of [[results,resultsName],[refRun?refRun.results:[],refRun?refRun.name:'']])for(const p of data){const d=Math.hypot(g.sx(p[spec.x])-mx,g.sy(p[spec.y])-my);if(d<bd){bd=d;best={p,lab};}}
+    if(!tipEl){tipEl=document.createElement('div');tipEl.className='tip';}
+    if(!best){tipEl.remove();return;}
+    cv.parentElement.append(tipEl); const p=best.p;
+    tipEl.textContent=`${best.lab} · ${p.a}° · Cl ${p.cl.toFixed(3)} · Cd ${p.cd.toFixed(4)} · L/D ${p.cd>1e-4?(p.cl/p.cd).toFixed(1):'–'}`;
+    const x=g.sx(p[spec.x])+10, y=g.sy(p[spec.y])+10; tipEl.style.left=Math.min(x,r.width-tipEl.offsetWidth-4)+'px'; tipEl.style.top=(y+24)+'px';
+  });
+  cv.addEventListener('pointerleave',()=>tipEl&&tipEl.remove());
+}
+
+// ================= exports =================
+let downloads=null;
+// inside Claude, saving goes through the viewer's save prompt; as a standalone file, it is a normal browser download
+const localSaver={save:async({filename,data})=>{const blob=data instanceof Blob?data:new Blob([data]);const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);return {status:'saved'};}};
+(window.claude&&window.claude.use?window.claude.use('downloads'):Promise.resolve(localSaver)).then(d=>{downloads=d;if(d)$('exportGrp').hidden=false;}).catch(()=>{});
+const safeName=()=>(S.prof?S.prof.name:'profile').replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'').toLowerCase()||'profile';
+async function save(filename,data){
+  try{const r=await downloads.save({filename,data});$('expNote').textContent=r.status==='saved'?'Saved.':'Sent.';}
+  catch(e){const c=e&&e.code;$('expNote').textContent=c==='declined'?'Save cancelled.':c==='rate_limited'?'A save prompt is already open. Finish it, then try again.':'Could not save'+(e&&e.message?': '+e.message:'.');}
+}
+$('csv').onclick=()=>{
+  const lines=['angle_deg,Cl,Cd,L_over_D,Cm,reading'];
+  for(const r of results)lines.push([r.a,r.cl.toFixed(5),r.cd.toFixed(5),r.cd>1e-4?(r.cl/r.cd).toFixed(3):'',r.cm.toFixed(5),r.steady?'steady':'unsteady'].join(','));
+  save(`profile-lab-${safeName()}-${S.speed}kmh.csv`,lines.join('\n')+'\n');
+};
+const pdfTxt=t=>String(t).replace(/[–—−]/g,'-').replace(/·/g,'-').replace(/[^\x20-\x7E\xA0-\xFF]/g,'');
+$('pdf').onclick=async()=>{
+  if(!window.jspdf){$('expNote').textContent='The PDF library did not load. Reload the page and try again.';return;}
+  $('pdf').disabled=true;$('expNote').textContent='Building report…'; await new Promise(r=>setTimeout(r,50));
+  try{
+    const {jsPDF}=window.jspdf,doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'}),ink=[24,30,40],dim=[110,120,135],acc=[20,120,190];
+    const V=S.speed/3.6,{reReal,reSim}=updateTau();
+    doc.setFillColor(13,17,23);doc.rect(0,0,297,16,'F');doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(13);
+    doc.text('SLIPSTREAM PROFILE LAB  -  SECTION REPORT',12,10.5);doc.setFont('helvetica','normal');doc.setFontSize(9);doc.text(pdfTxt(S.prof.name+'  -  '+new Date().toLocaleString()),285,10.5,{align:'right'});
+    const table=(x,y,title,rows,w)=>{doc.setTextColor(...acc);doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text(title.toUpperCase(),x,y);y+=2;doc.setDrawColor(210,215,222);doc.line(x,y,x+w,y);y+=4.6;
+      for(const [k,v] of rows){doc.setFont('helvetica','normal');doc.setTextColor(...dim);doc.text(pdfTxt(k),x,y);doc.setTextColor(...ink);doc.setFont('helvetica','bold');doc.text(pdfTxt(v),x+w,y,{align:'right'});y+=5;}return y+3;};
+    let y=table(12,26,'Setup',[['Profile',S.prof.name],['Chord / span',S.chord+' m / '+S.span+' m'],['Air speed',S.speed+' km/h ('+V.toFixed(1)+' m/s)'],['Angle of attack',S.angle+'°'],
+      ['Resolution',W+'x'+H+' cells, chord '+Math.round(chordCells)+' cells'],['Reference length',S.ref==='chord'?'chord':'frontal height'],['Ground effect',S.ground?'moving floor, ride height '+Math.round(S.ride*100)+'% chord':'none'],
+      ['Real / simulated Re',Math.round(reReal).toLocaleString()+' / '+Math.round(reSim).toLocaleString()],['Blockage',$('block').textContent]],82);
+    y=table(12,y,'Current angle',[['Readings',$('status').textContent],['Lift Cl',$('cl').textContent],['Drag Cd',$('cd').textContent],['Lift / drag',$('ld').textContent],['Moment Cm',$('cm').textContent],
+      [$('liftNLab').textContent+' (span '+S.span+' m)',$('liftN').textContent],['Drag (span '+S.span+' m)',$('dragN').textContent]],82);
+    // flow pictures: speed and pressure with streaks
+    const shot=(mode)=>{const keep=S.mode;S.mode=mode;paintField();const vw=view.width,vh=view.height;view.width=1400;view.height=700;drawView();const u=view.toDataURL('image/jpeg',.9);view.width=vw;view.height=vh;S.mode=keep;paintField();drawView();return u;};
+    doc.addImage(shot('vel'),'JPEG',100,22,92,46);doc.addImage(shot('pres'),'JPEG',194,22,92,46);
+    doc.setTextColor(...ink);doc.setFont('helvetica','bold');doc.setFontSize(8);doc.text('Air speed',100,72);doc.text('Pressure (Cp -3 to +1)',194,72);
+    // charts in light colors for paper
+    const cw=600,ch=380; let cx=100;
+    if(results.length||refRun)for(const spec of CHARTS){const c=document.createElement('canvas');c.width=cw*2;c.height=ch*2;const x=c.getContext('2d');x.setTransform(2,0,0,2,0,0);drawChart(x,spec,cw,ch,THEME_LIGHT);
+      doc.addImage(c.toDataURL('image/jpeg',0.92),'JPEG',cx,82,60.5,38.3);doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(...ink);doc.text(['Lift Cl by angle','Drag Cd by angle','Lift vs drag (polar)'][CHARTS.indexOf(spec)],cx,80);cx+=62.75;}
+    if(refRun||results.length){doc.setFont('helvetica','normal');doc.setFontSize(7.5);doc.setTextColor(...dim);doc.text(pdfTxt('Blue: '+resultsName+(refRun?'   Orange: '+refRun.name+' (reference)':'')),100,124);}
+    // results table
+    let ty=130; doc.setFontSize(8);const cols=[100,122,146,170,192,214];
+    doc.setFont('helvetica','bold');doc.setTextColor(...dim);['Angle','Cl','Cd','L/D','Cm','Reading'].forEach((h,i)=>doc.text(h,cols[i],ty));ty+=4.5;
+    doc.setFont('helvetica','normal');doc.setTextColor(...ink);
+    for(const r of results.slice(0,14)){[r.a+'°',r.cl.toFixed(3),r.cd.toFixed(4),r.cd>1e-4?(r.cl/r.cd).toFixed(1):'-',r.cm.toFixed(3),r.steady?'steady':'unsteady'].forEach((v,i)=>doc.text(pdfTxt(v),cols[i],ty));ty+=4.4;}
+    if(!results.length){doc.setTextColor(...dim);doc.text('No sweep run yet.',100,ty);}
+    doc.setFontSize(7.5);doc.setTextColor(...dim);doc.setFont('helvetica','normal');
+    doc.text(doc.splitTextToSize('2D Lattice Boltzmann (D2Q9, regularized, Smagorinsky turbulence model). The section is treated as infinitely wide, which is right for wings, spoilers, tubes and blade sections away from their ends. Simulated Reynolds numbers are far below real ones, so expect earlier stall, lower peak lift and higher drag than published data; use the results to compare profiles.',82),12,y+2);
+    await save(`profile-lab-${safeName()}-${S.speed}kmh.pdf`,doc.output('blob'));
+  }catch(e){$('expNote').textContent='Could not create the report'+(e&&e.message?': '+e.message:'.');}
+  finally{$('pdf').disabled=false;}
+};
+
+// ================= UI =================
+function press(g,attr,val){document.querySelectorAll(`#${g} button`).forEach(b=>b.setAttribute('aria-pressed',b.dataset[attr]==val));}
+function syncLabels(){
+  $('spdOut').textContent=S.speed+' km/h';$('angOut').textContent=S.angle+'°';$('sizeOut').textContent=Math.round(S.size*100)+'% of tunnel';
+  $('rideOut').textContent=Math.round(S.ride*100)+'% of chord';$('cutOut').textContent=Math.round(S.cutPos*100)+'% '+(S.cut==='side'?'across':'of height');
+}
+function syncPause(){$('pause').textContent=S.paused?'Run':'Pause';$('pause').setAttribute('aria-pressed',S.paused);}
+function setProfile(prof,keepFlow){
+  if(sweep)stopSweep('Sweep stopped because the profile changed.');
+  S.prof=prof; S.ref=prof.ref; press('refSel','r',S.ref); S.damp=1; needMask=true; if(!keepFlow&&device&&bufs.f0)resetFlow(); drawCharts();
+}
+function loadPresetUI(){
+  const key=$('preset').value, p=makePreset(key); S.presetKey=key; $('meshOpts').hidden=true; $('nacaRow').hidden=key!=='naca';
+  if(p.defInvert!==undefined&&key!==loadPresetUI.last){$('invert').checked=p.defInvert;}
+  loadPresetUI.last=key; S.mesh=null; setProfile(applyInvert(makePreset(key)));
+}
+function recut(){
+  const c=cutMesh(); if(!c){$('cutNote').textContent='The cut plane misses the mesh here. Move the cut position.';return;}
+  $('cutNote').textContent=`Section found: ${c.loops} closed outline${c.loops>1?'s':''}, cut from the mesh at full detail.`;
+  setProfile(applyInvert({name:S.meshName+' '+(S.cut==='side'?'side':'top')+' cut '+Math.round(S.cutPos*100)+'%',polys:c.polys,pivot:c.pivot,ref:'chord'}),true);
+}
+$('preset').onchange=loadPresetUI;
+$('naca').addEventListener('change',()=>{if(S.presetKey==='naca'&&!S.mesh)loadPresetUI();});
+$('invert').onchange=()=>{if(S.mesh)recut();else setProfile(applyInvert(makePreset(S.presetKey)));};
+$('file').onchange=async e=>{
+  const file=e.target.files[0]; if(!file)return; const ext=file.name.split('.').pop().toLowerCase();
+  try{
+    if(ext==='stl'||ext==='obj'){
+      const raw=ext==='stl'?parseSTL(await file.arrayBuffer()):parseOBJ(await file.text()); if(!raw.length)throw new Error('no triangles');
+      S.mesh=raw; S.meshName=file.name.replace(/\.[a-z]+$/i,''); S.up=ext==='stl'?2:1; $('upAxis').value=S.up; S.flip=false; S.meshT=orientMesh(raw);
+      $('meshOpts').hidden=false; $('nacaRow').hidden=true; press('cutPlane','c',S.cut); setAngle(0); syncLabels(); recut(); if(device&&bufs.f0)resetFlow();
+    }else{ S.mesh=null; $('meshOpts').hidden=true; setProfile(applyInvert(parseDat(await file.text(),file.name))); }
+  }catch(err){$('hud').textContent='Could not read that file. Use an STL or OBJ mesh, or an airfoil .dat/.txt/.csv with x y coordinates.';}
+  e.target.value='';
+};
+$('upAxis').onchange=e=>{S.up=+e.target.value;S.meshT=orientMesh(S.mesh);recut();};
+$('flip').onclick=()=>{S.flip=!S.flip;S.meshT=orientMesh(S.mesh);recut();};
+$('cutPlane').onclick=e=>{const b=e.target.closest('button');if(!b)return;S.cut=b.dataset.c;press('cutPlane','c',S.cut);syncLabels();recut();};
+let cutTimer=0; $('cutPos').oninput=e=>{S.cutPos=e.target.value/100;syncLabels();clearTimeout(cutTimer);cutTimer=setTimeout(recut,90);};
+$('chord').oninput=e=>{S.chord=Math.max(.005,+e.target.value||.3);writeParams();showStatic();};
+$('span').oninput=e=>{S.span=Math.max(.01,+e.target.value||1);showStatic();};
+$('spd').oninput=e=>{S.speed=+e.target.value;syncLabels();writeParams();showStatic();};
+$('ang').oninput=e=>{S.angle=+e.target.value;syncLabels();needMask=true;};
+$('size').oninput=e=>{S.size=e.target.value/100;syncLabels();needMask=true;};
+$('ground').onchange=e=>{S.ground=e.target.checked;$('rideRow').hidden=!S.ground;if(!S.ground)S.cy=.5;needMask=true;};
+$('ride').oninput=e=>{S.ride=e.target.value/100;syncLabels();needMask=true;};
+$('refSel').onclick=e=>{const b=e.target.closest('button');if(!b)return;S.ref=b.dataset.r;press('refSel','r',S.ref);showStatic();judge();};
+$('res').onclick=e=>{const b=e.target.closest('button');if(!b||b.disabled)return;if(sweep)stopSweep('Sweep stopped because the resolution changed.');S.res=+b.dataset.r;press('res','r',S.res);if(device)alloc();};
+$('mode').onclick=e=>{const b=e.target.closest('button');if(!b)return;S.mode=b.dataset.m;press('mode','m',S.mode);legend();paintField();};
+$('lines').onchange=e=>{S.lines=e.target.checked;};
+$('pause').onclick=()=>{S.paused=!S.paused;syncPause();};
+$('reset').onclick=()=>resetFlow();
+$('runSweep').onclick=()=>sweep?stopSweep():startSweep();
+$('pin').onclick=()=>{if(!results.length)return;refRun={name:resultsName,results:results.map(r=>({...r}))};$('clearRef').disabled=false;drawCharts();$('sweepNote').textContent='Kept as reference. Change the profile and run another sweep to compare.';};
+$('clearRef').onclick=()=>{refRun=null;$('clearRef').disabled=true;drawCharts();};
+// drag and keyboard positioning
+let drag=null;
+const toGrid=ev=>{const r=view.getBoundingClientRect();return [(ev.clientX-r.left)/r.width*W,(1-(ev.clientY-r.top)/r.height)*H];};
+view.addEventListener('pointerdown',ev=>{if(!W)return;const [gx,gy]=toGrid(ev);let hit=false;
+  for(let dy=-5;dy<=5&&!hit;dy++)for(let dx=-5;dx<=5;dx++){const x=(gx|0)+dx,y=(gy|0)+dy;if(x>=0&&x<W&&y>=0&&y<H&&solid[x+y*W]){hit=true;break;}}
+  if(!hit)return; drag={ox:gx/W-S.cx,oy:gy/H-S.cy}; view.classList.add('drag'); view.setPointerCapture(ev.pointerId);});
+view.addEventListener('pointermove',ev=>{if(!drag)return;const [gx,gy]=toGrid(ev);S.cx=Math.min(.6,Math.max(.12,gx/W-drag.ox));
+  if(S.ground){S.ride=Math.max(.05,Math.min(1.5,(gy/H-drag.oy)*H/chordCells-lowestBelowPivot()));$('ride').value=Math.round(S.ride*100);syncLabels();}
+  else S.cy=Math.min(.85,Math.max(.15,gy/H-drag.oy)); needMask=true;});
+view.addEventListener('pointerup',()=>{drag=null;view.classList.remove('drag');});
+view.tabIndex=0;
+view.addEventListener('keydown',ev=>{const st=(ev.shiftKey?10:1);
+  if(ev.key==='ArrowLeft')S.cx=Math.max(.12,S.cx-st/W);else if(ev.key==='ArrowRight')S.cx=Math.min(.6,S.cx+st/W);
+  else if(ev.key==='ArrowUp'){if(S.ground){S.ride=Math.min(1.5,S.ride+st/chordCells);$('ride').value=Math.round(S.ride*100);syncLabels();}else S.cy=Math.min(.85,S.cy+st/H);}
+  else if(ev.key==='ArrowDown'){if(S.ground){S.ride=Math.max(.05,S.ride-st/chordCells);$('ride').value=Math.round(S.ride*100);syncLabels();}else S.cy=Math.max(.15,S.cy-st/H);}
+  else return; ev.preventDefault(); needMask=true;});
+addEventListener('resize',resize);
+
+// ================= main loop =================
+function frame(){
+  simTick();
+  const now=performance.now(); if(now-winStart>1000){stepsPerSec=stepsWindow/(now-winStart)*1000;stepsWindow=0;winStart=now;
+    $('fps').textContent=S.paused?'paused':(stepsPerSec*N/1e6).toFixed(0)+' M cells/s';
+    $('hud').textContent=now<noteUntil?note:`${W}×${H} cells · chord ${Math.round(chordCells)} cells · ${S.speed} km/h · ${S.angle}°`+(S.damp>1?` · damping ${S.damp.toFixed(1)}×`:'');}
+  if(field&&!S.paused&&S.lines)moveParticles(Math.min(12,Math.max(1,stepsPerSec/60)));
+  drawView(); requestAnimationFrame(frame);
+}
+(async()=>{
+  press('mode','m','vel');press('res','r',S.res);press('refSel','r','chord');press('cutPlane','c','side');syncLabels();
+  [W,H]=RES[S.res]; resize(); loadPresetUI(); legend(); renderResults();
+  let ok=false; try{ok=await initGPU();}catch(err){fail('Could not start the GPU simulation: '+err.message);}
+  if(ok){RES.forEach((r,i)=>{if(9*r[0]*r[1]*4>maxBinding)document.querySelector(`#res [data-r="${i}"]`).disabled=true;});alloc();}
+  requestAnimationFrame(frame);
+})();
+</script>
+
+</body>
+</html>
